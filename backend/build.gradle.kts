@@ -54,7 +54,7 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.hibernate.orm:hibernate-spatial")
     implementation("org.locationtech.jts:jts-core:1.20.0")
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
     implementation("org.apache.poi:poi-ooxml:5.5.1")
     implementation("com.github.ben-manes.caffeine:caffeine")
 
