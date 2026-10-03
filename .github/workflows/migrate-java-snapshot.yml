@@ -1,4 +1,5 @@
 name: Migrate ForestIQ Java snapshot
+# one-time migration trigger
 
 on:
   push:
