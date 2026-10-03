@@ -1,0 +1,8 @@
+benchmark	ok	total	avg_ms	p50_ms	p95_ms	p99_ms	max_ms
+owners_legacy	12	200	17611.26	15348.466	27956.068	27956.068	27956.068
+owners_cursor	200	200	244.73	239.687	279.319	300.822	308.553
+relations_legacy	56	244	20307.39	18920.159	29009.169	29908.044	29908.044
+relations_cursor	0	200	NA	NA	NA	NA	NA
+parcel_summary	0	200	NA	NA	NA	NA	NA
+tile_cold	0	120	NA	NA	NA	NA	NA
+tile_warm	0	120	NA	NA	NA	NA	NA

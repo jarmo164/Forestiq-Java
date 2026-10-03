@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "status_order": [
+    "code_merged",
+    "configured",
+    "live_verified"
+  ],
+  "issues": [
+    {
+      "issue": 388,
+      "state": "open",
+      "status": "code_merged",
+      "codeEvidence": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/heavy-verification.yml",
+        ".github/workflows/ingestion-contract.yml",
+        "scripts/ci/main_ci_baseline_report.py"
+      ],
+      "liveEvidence": null,
+      "blocking": "same-SHA canonical green main CI baseline is not yet proven"
+    },
+    {
+      "issue": 430,
+      "state": "closed",
+      "status": "live_verified",
+      "codeEvidence": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/heavy-verification.yml",
+        ".github/workflows/e2e-compose.yml",
+        "config/ci-workload-ownership.json"
+      ],
+      "liveEvidence": [
+        "https://github.com/jarmo164/ForestIQ/actions/runs/35758787914",
+        "https://github.com/jarmo164/ForestIQ/actions/runs/35758787860"
+      ],
+      "blocking": null
+    },
+    {
+      "issue": 431,
+      "state": "open",
+      "status": "code_merged",
+      "codeEvidence": [
+        "docs/self-hosted-runner.md",
+        ".github/workflows/self-hosted-runner-acceptance.yml",
+        "scripts/ci/runner-acceptance.sh"
+      ],
+      "liveEvidence": null,
+      "blocking": "runner registration, reboot recovery and security acceptance are not live-verified"
+    },
+    {
+      "issue": 434,
+      "state": "open",
+      "status": "code_merged",
+      "codeEvidence": [
+        ".github/forestiq-repository-policy.json",
+        "scripts/apply-github-governance.sh",
+        "scripts/github_repository_governance_audit.py"
+      ],
+      "liveEvidence": null,
+      "blocking": "server-side branch protection and auto-merge remain unverified/not fully enabled"
+    },
+    {
+      "issue": 436,
+      "state": "closed",
+      "status": "code_merged",
+      "codeEvidence": [
+        ".github/workflows/ci.yml"
+      ],
+      "liveEvidence": null,
+      "blocking": null
+    },
+    {
+      "issue": 437,
+      "state": "closed",
+      "status": "code_merged",
+      "codeEvidence": [
+        ".github/workflows/heavy-verification.yml"
+      ],
+      "liveEvidence": null,
+      "blocking": null
+    },
+    {
+      "issue": 438,
+      "state": "closed",
+      "status": "code_merged",
+      "codeEvidence": [
+        ".github/workflows/e2e-compose.yml"
+      ],
+      "liveEvidence": null,
+      "blocking": null
+    },
+    {
+      "issue": 439,
+      "state": "closed",
+      "status": "code_merged",
+      "codeEvidence": [
+        ".github/workflows/heavy-verification.yml"
+      ],
+      "liveEvidence": null,
+      "blocking": null
+    },
+    {
+      "issue": 440,
+      "state": "closed",
+      "status": "live_verified",
+      "codeEvidence": [
+        "https://github.com/jarmo164/ForestIQ/pull/527",
+        "scripts/capture-runner-registration-evidence.sh"
+      ],
+      "liveEvidence": [
+        "https://github.com/jarmo164/ForestIQ/actions/runs/35743930089",
+        "https://github.com/jarmo164/ForestIQ/actions/runs/35758787860"
+      ],
+      "blocking": null
+    },
+    {
+      "issue": 441,
+      "state": "open",
+      "status": "code_merged",
+      "codeEvidence": [
+        "https://github.com/jarmo164/ForestIQ/pull/528",
+        "scripts/ci/capture_runner_reboot_evidence.sh"
+      ],
+      "liveEvidence": null,
+      "blocking": "before/after reboot acceptance evidence has not been captured"
+    },
+    {
+      "issue": 442,
+      "state": "open",
+      "status": "code_merged",
+      "codeEvidence": [
+        "https://github.com/jarmo164/ForestIQ/pull/529",
+        "config/self-hosted-runner-security.json"
+      ],
+      "liveEvidence": null,
+      "blocking": "live runner security acceptance has not been captured"
+    },
+    {
+      "issue": 443,
+      "state": "closed",
+      "status": "code_merged",
+      "codeEvidence": [
+        "scripts/ci/cleanup-self-hosted.sh"
+      ],
+      "liveEvidence": null,
+      "blocking": null
+    },
+    {
+      "issue": 444,
+      "state": "closed",
+      "status": "code_merged",
+      "codeEvidence": [
+        ".github/workflows/self-hosted-runner-diagnostics.yml"
+      ],
+      "liveEvidence": null,
+      "blocking": null
+    },
+    {
+      "issue": 455,
+      "state": "closed",
+      "status": "code_merged",
+      "codeEvidence": [
+        ".github/forestiq-repository-policy.json"
+      ],
+      "liveEvidence": null,
+      "blocking": null
+    },
+    {
+      "issue": 456,
+      "state": "open",
+      "status": "code_merged",
+      "codeEvidence": [
+        "https://github.com/jarmo164/ForestIQ/pull/530",
+        "scripts/capture-main-protection-evidence.sh"
+      ],
+      "liveEvidence": null,
+      "blocking": "branch-protection endpoint requires live server-side evidence and current connector cannot read it"
+    },
+    {
+      "issue": 457,
+      "state": "open",
+      "status": "code_merged",
+      "codeEvidence": [
+        "https://github.com/jarmo164/ForestIQ/pull/485",
+        "scripts/safe-auto-merge.sh"
+      ],
+      "liveEvidence": null,
+      "blocking": "GitHub repository currently reports allow_auto_merge=false"
+    }
+  ]
+}

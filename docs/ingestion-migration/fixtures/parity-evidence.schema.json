@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forestiq.local/schemas/ingestion-parity-evidence.schema.json",
+  "title": "ForestIQ source cutover parity evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "repositorySha",
+    "environment",
+    "jobKey",
+    "source",
+    "mode",
+    "runs",
+    "comparison",
+    "stateSafety",
+    "checks",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "repositorySha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 1
+    },
+    "jobKey": {
+      "type": "string",
+      "enum": [
+        "CADASTRE_PUBLIC_DATA",
+        "FOREST_NOTIFICATIONS",
+        "FOREST_PLAN",
+        "METSAREGISTER_WFS_MIRROR",
+        "OWNER_CADASTRE_RELATIONS",
+        "WEASEL_OWNERSHIP_TRANSITIONS",
+        "INHERITANCE_NOTICES"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "SHADOW",
+        "CUTOVER_REHEARSAL",
+        "PYTHON"
+      ]
+    },
+    "sourceVersion": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sourceChecksum": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "runs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "javaRunId",
+        "pythonRunId"
+      ],
+      "properties": {
+        "javaRunId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pythonRunId": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "javaRows",
+        "pythonRows",
+        "stableIdMatch",
+        "duplicates",
+        "malformed",
+        "withinTolerance"
+      ],
+      "properties": {
+        "javaRows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pythonRows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stableIdMatch": {
+          "type": "boolean"
+        },
+        "stableIdChecksum": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duplicates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "malformed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "withinTolerance": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "stateSafety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "watermarkBefore",
+        "watermarkAfter",
+        "generationBefore",
+        "generationAfter",
+        "lastKnownGoodReadable"
+      ],
+      "properties": {
+        "watermarkBefore": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "watermarkAfter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "generationBefore": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "generationAfter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lastKnownGoodReadable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manualSuccess",
+        "scheduledSuccesses",
+        "failureRecovery",
+        "rollbackRehearsal"
+      ],
+      "properties": {
+        "manualSuccess": {
+          "type": "boolean"
+        },
+        "scheduledSuccesses": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failureRecovery": {
+          "type": "boolean"
+        },
+        "rollbackRehearsal": {
+          "type": "boolean"
+        },
+        "secretsAbsentFromApi": {
+          "type": "boolean"
+        }
+      }
+    },
+    "approvedBy": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+Pager usage is off.
+Timing is on.
+        table_name        | n_live_tup | n_dead_tup | seq_scan | idx_scan | total_size 
+--------------------------+------------+------------+----------+----------+------------
+ owner_parcel_relation    |          0 |          0 |        0 |    10915 | 1770 MB
+ land_parcel              |          0 |          0 |        1 |    15916 | 1131 MB
+ land_parcel_render       |          0 |          0 |        0 |      120 | 1117 MB
+ owner                    |          0 |          0 |      308 | 52330985 | 1045 MB
+ registry_sync_log        |          0 |          0 |        1 |        0 | 303 MB
+ land_parcel_render_owner |          0 |          0 |        0 |   487560 | 117 MB
+(6 rows)
+
+Time: 32.222 ms
+         relname          | heap_blks_read | heap_blks_hit | heap_cache_hit_pct | idx_blks_read | idx_blks_hit 
+--------------------------+----------------+---------------+--------------------+---------------+--------------
+ land_parcel              |          63178 |      26587944 |              99.76 |        104641 |       539188
+ land_parcel_render       |           3448 |        131312 |              97.44 |           236 |         9862
+ land_parcel_render_owner |          12511 |        371009 |              96.74 |         12897 |      1449801
+ owner                    |       28236283 |      25469134 |              47.42 |        391199 |    156876185
+ owner_parcel_relation    |       40987519 |      77038977 |              65.27 |       1115338 |      1424645
+(5 rows)
+
+Time: 4.565 ms
+ datname  | numbackends | xact_commit | xact_rollback | blks_read | blks_hit  | temp_files | temp_bytes | blk_read_time | blk_write_time 
+----------+-------------+-------------+---------------+-----------+-----------+------------+------------+---------------+----------------
+ forestiq |          11 |        3034 |           205 |  70955735 | 290138448 |       4922 | 23 GB      |             0 |              0
+(1 row)
+
+Time: 2.096 ms
+ wal_records | wal_fpi | wal_bytes  
+-------------+---------+------------
+          20 |       5 | 8035 bytes
+(1 row)
+
+Time: 2.471 ms

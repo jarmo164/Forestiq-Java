@@ -1,0 +1,65 @@
+Pager usage is off.
+Timing is on.
+        table_name        | n_live_tup | n_dead_tup | seq_scan | idx_scan | total_size | last_analyze | last_autoanalyze | last_vacuum | last_autovacuum 
+--------------------------+------------+------------+----------+----------+------------+--------------+------------------+-------------+-----------------
+ owner_parcel_relation    |          0 |          0 |        0 |    21716 | 1770 MB    |              |                  |             | 
+ land_parcel              |          0 |          0 |        5 |    26253 | 1131 MB    |              |                  |             | 
+ land_parcel_render       |          0 |          0 |        2 |      364 | 1117 MB    |              |                  |             | 
+ owner                    |          0 |          0 |      311 | 52342000 | 1045 MB    |              |                  |             | 
+ registry_sync_log        |          0 |          0 |        4 |        3 | 303 MB     |              |                  |             | 
+ land_parcel_render_owner |          0 |          0 |        0 | 24802014 | 117 MB     |              |                  |             | 
+(6 rows)
+
+Time: 14.741 ms
+         relname          | heap_blks_read | heap_blks_hit | heap_cache_hit_pct | idx_blks_read | idx_blks_hit 
+--------------------------+----------------+---------------+--------------------+---------------+--------------
+ land_parcel              |         121656 |      26977085 |              99.55 |        108794 |       573707
+ land_parcel_render       |         194249 |      19148758 |              99.00 |          1831 |       144603
+ land_parcel_render_owner |          36238 |      19539092 |              99.81 |         30336 |     74375738
+ owner                    |       28284232 |      25492758 |              47.40 |        392631 |    156909271
+ owner_parcel_relation    |       40987712 |      77532464 |              65.42 |       1126136 |      1458079
+(5 rows)
+
+Time: 2.548 ms
+ datname  | numbackends | xact_commit | xact_rollback | blks_read | blks_hit  | temp_files | temp_bytes | blk_read_time | blk_write_time 
+----------+-------------+-------------+---------------+-----------+-----------+------------+------------+---------------+----------------
+ forestiq |           8 |        8275 |           206 |  71342007 | 402495464 |       4923 | 23 GB      |      53979.78 |        182.415
+(1 row)
+
+Time: 1.248 ms
+ wal_records | wal_fpi | wal_bytes 
+-------------+---------+-----------
+       42771 |   42747 | 3842 kB
+(1 row)
+
+Time: 0.384 ms
+=== pg_stat_statements by total time ===
+ calls | total_ms  | mean_ms | rows  |                                                                                                            query                                                                                                             
+-------+-----------+---------+-------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+   122 | 184489.28 | 1512.21 |   122 | WITH tile AS ( SELECT ST_TileEnvelope($1::int, $2::int, $3::int) AS envelope ), bounds AS ( SELECT envelope, ST_XMin(envelope)::double precision AS min_x, ST_YMin(envelope)::double precision AS min_y, (ST_XMax(envelope) 
+   121 |  42445.73 |  350.79 |   121 | WITH tile AS ( SELECT ST_TileEnvelope($1::int, $2::int, $3::int) AS envelope ), candidates AS ( SELECT pr.parcel_id, pr.cadastral_code, pr.area_hectares, pr.marked, CASE WHEN $4::int <= $9 THEN pr.boundary_low_3857 ELSE 
+   200 |    756.47 |    3.78 | 10000 | SELECT r.owner_id, o.display_name AS owner_name, o.personal_or_registry_code AS owner_code, r.parcel_id, p.cadastral_code, p.name AS parcel_name, p.area_hectares, r.active, r.source, r.source_external_key, r.source_seen_
+   200 |    379.94 |    1.90 | 10200 | select "o"."id", "o"."display_name", "o"."personal_or_registry_code", "o"."status", "o"."updated_at", "o"."assigned_to_subject", "o"."phone", "o"."status_set_at" from "owner" as "o" where "o"."organization_id" = cast($1 
+   200 |    170.12 |    0.85 |   200 | SELECT p.id AS parcel_id, p.cadastral_code, p.name, p.address, p.postal, p.reg_nr, p.parcel_type, p.mk_date, p.area_hectares, p.yard_area, p.forest_area, p.arable_area, p.meadow_area, p.underwater_area, p.buildings_area,
+   200 |     74.61 |    0.37 | 10000 | select "opr"."owner_id", count("opr"."parcel_id") as "parcel_count" from "owner_parcel_relation" as "opr" where ("opr"."organization_id" = cast($1 as uuid) and "opr"."active" = $52 and "opr"."owner_id" in (cast($2 as uui
+   200 |     25.38 |    0.13 | 10200 | SELECT r.owner_id, r.parcel_id, r.updated_at FROM owner_parcel_relation r WHERE r.organization_id=$1 ORDER BY r.updated_at DESC, r.owner_id ASC, r.parcel_id ASC LIMIT $2
+   200 |     14.69 |    0.07 |   200 | SELECT o.id AS owner_id, o.display_name, o.status FROM owner_parcel_relation opr JOIN owner o ON o.id = opr.owner_id AND o.organization_id = opr.organization_id WHERE opr.organization_id = $1 AND opr.parcel_id = $2 AND o
+   200 |     11.21 |    0.06 |     0 | BEGIN READ ONLY
+     1 |      4.29 |    4.29 |     6 | SELECT relname AS table_name,n_live_tup,n_dead_tup,seq_scan,idx_scan, pg_size_pretty(pg_total_relation_size(relid)) AS total_size, last_analyze,last_autoanalyze,last_vacuum,last_autovacuum FROM pg_stat_user_tables WHERE 
+(10 rows)
+
+=== pg_stat_statements by mean time (calls >= 3) ===
+ calls | total_ms  | mean_ms | rows  |                                                                                                            query                                                                                                             
+-------+-----------+---------+-------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+   122 | 184489.28 | 1512.21 |   122 | WITH tile AS ( SELECT ST_TileEnvelope($1::int, $2::int, $3::int) AS envelope ), bounds AS ( SELECT envelope, ST_XMin(envelope)::double precision AS min_x, ST_YMin(envelope)::double precision AS min_y, (ST_XMax(envelope) 
+   121 |  42445.73 |  350.79 |   121 | WITH tile AS ( SELECT ST_TileEnvelope($1::int, $2::int, $3::int) AS envelope ), candidates AS ( SELECT pr.parcel_id, pr.cadastral_code, pr.area_hectares, pr.marked, CASE WHEN $4::int <= $9 THEN pr.boundary_low_3857 ELSE 
+   200 |    756.47 |    3.78 | 10000 | SELECT r.owner_id, o.display_name AS owner_name, o.personal_or_registry_code AS owner_code, r.parcel_id, p.cadastral_code, p.name AS parcel_name, p.area_hectares, r.active, r.source, r.source_external_key, r.source_seen_
+   200 |    379.94 |    1.90 | 10200 | select "o"."id", "o"."display_name", "o"."personal_or_registry_code", "o"."status", "o"."updated_at", "o"."assigned_to_subject", "o"."phone", "o"."status_set_at" from "owner" as "o" where "o"."organization_id" = cast($1 
+   200 |    170.12 |    0.85 |   200 | SELECT p.id AS parcel_id, p.cadastral_code, p.name, p.address, p.postal, p.reg_nr, p.parcel_type, p.mk_date, p.area_hectares, p.yard_area, p.forest_area, p.arable_area, p.meadow_area, p.underwater_area, p.buildings_area,
+     7 |      3.57 |    0.51 |   147 | SELECT c.oid, a.attnum, a.attname, c.relname, n.nspname, a.attnotnull OR (t.typtype = $1 AND t.typnotnull), a.attidentity != $2 OR pg_catalog.pg_get_expr(d.adbin, d.adrelid) LIKE $3 FROM pg_catalog.pg_class c JOIN pg_cat
+     7 |      3.57 |    0.51 |   140 | SELECT c.oid, a.attnum, a.attname, c.relname, n.nspname, a.attnotnull OR (t.typtype = $1 AND t.typnotnull), a.attidentity != $2 OR pg_catalog.pg_get_expr(d.adbin, d.adrelid) LIKE $3 FROM pg_catalog.pg_class c JOIN pg_cat
+   200 |     74.61 |    0.37 | 10000 | select "opr"."owner_id", count("opr"."parcel_id") as "parcel_count" from "owner_parcel_relation" as "opr" where ("opr"."organization_id" = cast($1 as uuid) and "opr"."active" = $52 and "opr"."owner_id" in (cast($2 as uui
+     7 |      1.30 |    0.19 |    21 | SELECT c.oid, a.attnum, a.attname, c.relname, n.nspname, a.attnotnull OR (t.typtype = $1 AND t.typnotnull), a.attidentity != $2 OR pg_catalog.pg_get_expr(d.adbin, d.adrelid) LIKE $3 FROM pg_catalog.pg_class c JOIN pg_cat
+   200 |     25.38 |    0.13 | 10200 | SELECT r.owner_id, r.parcel_id, r.updated_at FROM owner_parcel_relation r WHERE r.organization_id=$1 ORDER BY r.updated_at DESC, r.owner_id ASC, r.parcel_id ASC LIMIT $2
+(10 rows)
+

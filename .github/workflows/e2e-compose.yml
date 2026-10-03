@@ -1,0 +1,296 @@
+name: E2E / Compose
+
+on:
+  workflow_call:
+    inputs:
+      runner_labels:
+        description: JSON array of labels used to select the E2E runner.
+        required: false
+        type: string
+        default: '["self-hosted","macOS","ARM64","forestiq","heavy-ci"]'
+      checkout_ref:
+        description: Exact commit/ref verified by the Heavy CI trust classifier.
+        required: false
+        type: string
+        default: ""
+      performance_profile:
+        description: none, standard or performance; performance runs representative DB/MVT evidence.
+        required: false
+        type: string
+        default: "none"
+  workflow_dispatch:
+    inputs:
+      runner_labels:
+        description: JSON array of labels used to select the E2E runner.
+        required: false
+        type: string
+        default: '["self-hosted","macOS","ARM64","forestiq","heavy-ci"]'
+      performance_profile:
+        description: Optional performance evidence profile for manual runs.
+        required: false
+        type: choice
+        options: [none, standard, performance]
+        default: none
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-compose-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: E2E / Chromium + Keycloak + PostGIS
+    runs-on: ${{ fromJSON(inputs.runner_labels) }}
+    timeout-minutes: 90
+
+    env:
+      COMPOSE_PROJECT_NAME: forestiqe2e${{ github.run_id }}${{ github.run_attempt }}
+      CI: "true"
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+      E2E_USERNAME: admin
+      E2E_PASSWORD: forestiq
+      E2E_MANAGER_USERNAME: e2e-manager
+      E2E_CALLER_A_USERNAME: e2e-caller-a
+      E2E_CALLER_B_USERNAME: e2e-caller-b
+      E2E_EVALUATOR_USERNAME: e2e-evaluator
+      E2E_ROLE_PASSWORD: forestiq-e2e
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Verify Docker runtime
+        shell: bash
+        run: docker info
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium on Linux
+        if: ${{ runner.os == 'Linux' }}
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Playwright Chromium on macOS
+        if: ${{ runner.os == 'macOS' }}
+        working-directory: frontend
+        run: pnpm exec playwright install chromium
+
+      - name: Create isolated E2E environment
+        shell: bash
+        run: |
+          cat > .env.e2e <<'EOF'
+          LOCAL_PORT_HOST=127.0.0.1
+          POSTGRES_PORT=55432
+          KEYCLOAK_PORT=8180
+          MINIO_API_PORT=9000
+          MINIO_CONSOLE_PORT=9001
+          API_PORT=8080
+          FRONTEND_PORT=3000
+          POSTGRES_DB=forestiq_e2e
+          POSTGRES_USER=forestiq_e2e
+          POSTGRES_PASSWORD=forestiq_e2e_password
+          API_DATABASE_USER=forestiq_api_e2e
+          API_DATABASE_PASSWORD=forestiq_api_e2e_password
+          INGEST_DATABASE_USER=forestiq_ingest_e2e
+          INGEST_DATABASE_PASSWORD=forestiq_ingest_e2e_password
+          POSTGRES_PLATFORM=linux/amd64
+          MINIO_ROOT_USER=forestiq-e2e
+          MINIO_ROOT_PASSWORD=forestiq-e2e-minio-password
+          S3_BUCKET=forestiq-e2e-contracts
+          S3_REGION=us-east-1
+          KEYCLOAK_ADMIN=admin
+          KEYCLOAK_ADMIN_PASSWORD=forestiq
+          KEYCLOAK_ADMIN_API_CLIENT_SECRET=forestiq-local-admin-api
+          KEYCLOAK_REALM=forestiq-dev
+          NEXT_PUBLIC_KEYCLOAK_URL=http://127.0.0.1:8180
+          NEXT_PUBLIC_KEYCLOAK_REALM=forestiq-dev
+          NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=forestiq-web
+          NEXT_PUBLIC_API_BASE_URL=/api
+          INTERNAL_API_BASE_URL=http://api:8080
+          CORS_ALLOWED_ORIGINS=http://127.0.0.1:3000
+          NEXT_PUBLIC_MAPTILER_KEY=e2e-not-a-production-key
+          SENTRY_DSN=
+          REGISTRY_AUTO_REFRESH_ENABLED=false
+          INHERITANCE_SOURCE_AUTO_REFRESH_ENABLED=false
+          METSIS_PORTFOLIO_AUTO_SYNC_ENABLED=false
+          WEASEL_AUTO_REFRESH_ENABLED=false
+          EOF
+          chmod 600 .env.e2e
+
+      - name: Validate Compose configuration
+        shell: bash
+        run: docker compose --env-file .env.e2e -f compose.yaml config --quiet
+
+      - name: Build and start the E2E stack
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          dc() {
+            docker compose --env-file .env.e2e -f compose.yaml "$@"
+          }
+
+          wait_for_health() {
+            local service="$1"
+            local deadline=$((SECONDS + 300))
+            while (( SECONDS < deadline )); do
+              local container_id state
+              container_id="$(dc ps -q "$service" 2>/dev/null || true)"
+              if [[ -n "$container_id" ]]; then
+                state="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")"
+                if [[ "$state" == "healthy" ]]; then
+                  echo "$service is healthy"
+                  return 0
+                fi
+                if [[ "$state" == "exited" || "$state" == "dead" ]]; then
+                  echo "::error::$service ended before becoming healthy (state: $state)"
+                  dc logs --no-color "$service" || true
+                  return 1
+                fi
+              fi
+              sleep 3
+            done
+            echo "::error::$service did not become healthy within five minutes"
+            dc ps
+            dc logs --no-color "$service" || true
+            return 1
+          }
+
+          wait_for_completion() {
+            local service="$1"
+            local deadline=$((SECONDS + 300))
+            while (( SECONDS < deadline )); do
+              local container_id state exit_code
+              container_id="$(dc ps --all -q "$service" 2>/dev/null || true)"
+              if [[ -n "$container_id" ]]; then
+                state="$(docker inspect --format '{{.State.Status}}' "$container_id")"
+                if [[ "$state" == "exited" ]]; then
+                  exit_code="$(docker inspect --format '{{.State.ExitCode}}' "$container_id")"
+                  if [[ "$exit_code" == "0" ]]; then
+                    echo "$service completed successfully"
+                    return 0
+                  fi
+                  echo "::error::$service failed with exit code $exit_code"
+                  dc logs --no-color "$service" || true
+                  return 1
+                fi
+              fi
+              sleep 3
+            done
+            echo "::error::$service did not complete within five minutes"
+            dc ps
+            dc logs --no-color "$service" || true
+            return 1
+          }
+
+          wait_for_http() {
+            local url="$1"
+            local name="$2"
+            local deadline=$((SECONDS + 300))
+            while (( SECONDS < deadline )); do
+              if curl --fail --silent --show-error --max-time 5 "$url" >/dev/null; then
+                echo "$name is reachable at $url"
+                return 0
+              fi
+              sleep 3
+            done
+            echo "::error::$name did not respond successfully at $url within five minutes"
+            dc ps
+            dc logs --no-color "$name" || true
+            return 1
+          }
+
+          dc up --detach --build
+          wait_for_health postgres
+          wait_for_health keycloak
+          wait_for_completion keycloak-setup
+          wait_for_health minio
+          wait_for_completion minio-setup
+          wait_for_health api
+          wait_for_http http://127.0.0.1:8080/actuator/health/readiness api
+          wait_for_http http://127.0.0.1:3000/login frontend
+
+      - name: Seed deterministic E2E fixture
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          dc() {
+            docker compose --env-file .env.e2e -f compose.yaml "$@"
+          }
+          {
+            sed '/^\\ir e2e-seed\.sql$/d' scripts/e2e-seed-all.sql
+            cat scripts/e2e-seed.sql
+          } | dc exec --no-TTY postgres psql \
+            --set ON_ERROR_STOP=on \
+            --username forestiq_e2e \
+            --dbname forestiq_e2e
+
+      - name: Run authenticated Playwright E2E tests
+        working-directory: frontend
+        shell: bash
+        run: pnpm test:e2e:playwright
+
+      - name: Run exact-SHA representative performance gate
+        if: ${{ inputs.performance_profile == 'performance' }}
+        shell: bash
+        run: bash scripts/perf/run_compose_performance_gate.sh .env.e2e
+
+      - name: Upload performance evidence
+        if: ${{ inputs.performance_profile == 'performance' && always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: performance-evidence-${{ github.sha }}
+          path: build/perf/
+          if-no-files-found: warn
+          retention-days: 90
+
+
+      - name: Collect Compose diagnostics
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/e2e/compose-logs
+          dc() {
+            docker compose --env-file .env.e2e -f compose.yaml "$@"
+          }
+          dc ps --all > artifacts/e2e/compose-ps.txt || true
+          dc config > artifacts/e2e/compose-config.yaml || true
+          for service in postgres keycloak keycloak-setup minio minio-setup api frontend; do
+            dc logs --no-color --timestamps "$service" > "artifacts/e2e/compose-logs/${service}.log" 2>&1 || true
+          done
+
+      - name: Upload E2E diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+            artifacts/e2e/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Tear down E2E stack and workspace
+        if: ${{ always() }}
+        shell: bash
+        run: bash scripts/ci/cleanup-self-hosted.sh

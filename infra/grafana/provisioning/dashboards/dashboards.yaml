@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: ForestIQ
+    orgId: 1
+    folder: ForestIQ
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

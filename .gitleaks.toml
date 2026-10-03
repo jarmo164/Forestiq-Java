@@ -1,0 +1,9 @@
+title = "ForestIQ Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "No repository-wide secret allowlist. Add only narrow, reviewed test fixtures here."
+paths = []
+regexes = []

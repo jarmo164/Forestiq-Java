@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "enforceFromVersion": "65",
+  "exceptionMarker": "forestiq:migration-exception",
+  "model": "expand-migrate-contract",
+  "forbiddenPatterns": [
+    "\\bDROP\\s+TABLE\\b",
+    "\\bDROP\\s+COLUMN\\b",
+    "\\bTRUNCATE\\b",
+    "\\bALTER\\s+TABLE\\b[\\s\\S]{0,180}\\bALTER\\s+COLUMN\\b[\\s\\S]{0,120}\\bTYPE\\b"
+  ]
+}

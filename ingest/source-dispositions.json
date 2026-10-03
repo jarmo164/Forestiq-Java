@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "sourceKey": "metsis_owner_portfolio",
+      "upstream": "MetsIS / Forestek owner-cadastre portfolio snapshot",
+      "classification": "ETL_ONLY",
+      "currentJavaOwner": "MetsisPortfolioSyncService / OwnerCadastreIntegrationJob",
+      "targetJobKey": "OWNER_CADASTRE_RELATIONS",
+      "credentialOwner": "ingest",
+      "schedulerAllowedInApi": false
+    },
+    {
+      "sourceKey": "rik_cadastre_count",
+      "upstream": "RIK Kinnistusraamat objektide_arv SOAP count",
+      "classification": "REAL_TIME_DOMAIN_OPERATION",
+      "currentJavaOwner": "ExternalRegistryService.fetchRikCadastreCount",
+      "targetJobKey": null,
+      "credentialOwner": "api",
+      "schedulerAllowedInApi": false
+    },
+    {
+      "sourceKey": "official_inheritance_notices",
+      "upstream": "Ametlikud Teadaanded inheritance notices",
+      "classification": "ETL_ONLY",
+      "currentJavaOwner": "InheritanceNoticeIngestionService / InheritanceNoticeIntegrationJob",
+      "targetJobKey": "INHERITANCE_NOTICES",
+      "credentialOwner": "ingest",
+      "schedulerAllowedInApi": false
+    },
+    {
+      "sourceKey": "weasel_ownership_transitions",
+      "upstream": "Weasel ownership transitions",
+      "classification": "ETL_ONLY",
+      "currentJavaOwner": "OwnershipTransitionService / WeaselTransitionIntegrationJob",
+      "targetJobKey": "WEASEL_OWNERSHIP_TRANSITIONS",
+      "credentialOwner": "ingest",
+      "schedulerAllowedInApi": false
+    }
+  ]
+}

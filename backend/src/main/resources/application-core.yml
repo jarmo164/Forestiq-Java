@@ -1,0 +1,16 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      # Owner persistence is jOOQ-backed like the rest of the application. The
+      # core Render processes do not need to bootstrap Spring Data JPA/Hibernate.
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration
+  cache:
+    type: none
+
+management:
+  tracing:
+    sampling:
+      probability: 0.0

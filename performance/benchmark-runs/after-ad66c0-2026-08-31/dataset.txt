@@ -1,0 +1,19 @@
+=== DATASET COUNTS ===
+ database_name | database_size 
+---------------+---------------
+ forestiq      | 7796 MB
+(1 row)
+
+      table_name       |  rows   
+-----------------------+---------
+ land_parcel           |  780385
+ owner                 |  549121
+ owner_parcel_relation | 1151702
+ registry_sync_log     |  778418
+(4 rows)
+
+ geometries | avg_points | p50_points | p95_points | p99_points 
+------------+------------+------------+------------+------------
+     778266 |       16.4 |          9 |         46 |        132
+(1 row)
+

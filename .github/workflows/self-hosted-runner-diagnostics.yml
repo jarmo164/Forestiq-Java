@@ -1,0 +1,97 @@
+name: Self-hosted runner diagnostics
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-hosted-runner-diagnostics-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  diagnostics:
+    name: Mac Studio heavy CI runner diagnostics
+    runs-on:
+      - self-hosted
+      - macOS
+      - ARM64
+      - forestiq
+      - heavy-ci
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Print runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Runner name: ${RUNNER_NAME}"
+          echo "Runner OS: ${RUNNER_OS}"
+          echo "Runner arch: ${RUNNER_ARCH}"
+          echo "Workspace: ${GITHUB_WORKSPACE}"
+          uname -a
+          sw_vers || true
+
+      - name: Check required CLI tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(git docker node pnpm java python3)
+          missing=0
+          for tool in "${required[@]}"; do
+            if command -v "${tool}" >/dev/null 2>&1; then
+              echo "${tool}: $(command -v "${tool}")"
+              "${tool}" --version 2>/dev/null | head -n 1 || true
+            else
+              echo "::error::Missing required tool: ${tool}"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Check Docker daemon and Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker version
+          docker compose version
+          docker info --format 'Docker root: {{.DockerRootDir}}'
+          docker info --format 'Server version: {{.ServerVersion}}'
+
+      - name: Check disk and workspace state
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h .
+          free_kb="$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')"
+          min_free_kb=$((20 * 1024 * 1024))
+          if (( free_kb < min_free_kb )); then
+            echo "::error::Mac Studio runner has less than 20 GiB free disk space."
+            exit 1
+          fi
+          echo "Workspace top-level files:"
+          find . -maxdepth 1 -mindepth 1 -print | sort
+
+      - name: Validate Compose model without secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f compose.yaml config --quiet
+
+      - name: Report recent ForestIQ Docker resources
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Recent ForestIQ-related containers:"
+          docker ps -a --filter "name=forestiq" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || true
+          echo "ForestIQ-related volumes:"
+          docker volume ls --filter "name=forestiq" || true
+          echo "Disk usage summary:"
+          docker system df || true

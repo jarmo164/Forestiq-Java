@@ -1,0 +1,51 @@
+Pager usage is off.
+Timing is on.
+=== owner cursor candidate page ===
+                                                                                             QUERY PLAN                                                                                              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..6.62 rows=51 width=38) (actual time=0.101..0.408 rows=51 loops=1)
+   Buffers: shared hit=54
+   ->  Index Scan using owner_org_updated_cursor_idx on owner  (cost=0.42..66736.07 rows=549121 width=38) (actual time=0.099..0.394 rows=51 loops=1)
+         Index Cond: (organization_id = '11111111-1111-1111-1111-111111111111'::uuid)
+         Buffers: shared hit=54
+ Settings: effective_cache_size = '6GB', work_mem = '12MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers = '4', search_path = '"$user", public, topology, tiger'
+ Planning:
+   Buffers: shared hit=319
+ Planning Time: 1.451 ms
+ Execution Time: 0.527 ms
+(10 rows)
+
+Time: 8.402 ms
+=== ownership relation cursor candidate page ===
+                                                                                             QUERY PLAN                                                                                              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.55..1.98 rows=51 width=40) (actual time=0.046..0.056 rows=51 loops=1)
+   Buffers: shared hit=18
+   ->  Index Only Scan using owner_parcel_relation_org_updated_cursor_idx on owner_parcel_relation  (cost=0.55..32125.54 rows=1151702 width=40) (actual time=0.044..0.052 rows=51 loops=1)
+         Index Cond: (organization_id = '11111111-1111-1111-1111-111111111111'::uuid)
+         Heap Fetches: 0
+         Buffers: shared hit=18
+ Settings: effective_cache_size = '6GB', work_mem = '12MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers = '4', search_path = '"$user", public, topology, tiger'
+ Planning:
+   Buffers: shared hit=203
+ Planning Time: 0.556 ms
+ Execution Time: 0.076 ms
+(11 rows)
+
+Time: 1.575 ms
+=== tenant cadastral lookup ===
+                                                                                             QUERY PLAN                                                                                              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..2.64 rows=1 width=36) (actual time=0.045..0.046 rows=1 loops=1)
+   Buffers: shared hit=4
+   ->  Index Scan using parcel_organization_code_unique on land_parcel  (cost=0.42..2.64 rows=1 width=36) (actual time=0.044..0.044 rows=1 loops=1)
+         Index Cond: ((organization_id = '11111111-1111-1111-1111-111111111111'::uuid) AND ((cadastral_code)::text = '10501:001:0001'::text))
+         Buffers: shared hit=4
+ Settings: effective_cache_size = '6GB', work_mem = '12MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers = '4', search_path = '"$user", public, topology, tiger'
+ Planning:
+   Buffers: shared hit=238
+ Planning Time: 0.673 ms
+ Execution Time: 0.062 ms
+(10 rows)
+
+Time: 2.225 ms

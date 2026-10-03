@@ -1,0 +1,298 @@
+services:
+  # Production authentication is kept warm so login/admin calls do not depend on
+  # a sleeping free instance. Preview environments remain disabled below.
+  - type: web
+    name: forestiq-keycloak
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    branch: main
+    rootDir: infra/keycloak-render
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeployTrigger: off
+    healthCheckPath: /realms/master
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: KC_HTTP_PORT
+        value: "8080"
+      - key: KC_HTTP_ENABLED
+        value: "true"
+      - key: KC_PROXY_HEADERS
+        value: xforwarded
+      - key: KC_HOSTNAME
+        fromService:
+          type: web
+          name: forestiq-keycloak
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+        value: "true"
+      - key: KC_HEALTH_ENABLED
+        value: "true"
+      - key: KC_METRICS_ENABLED
+        value: "true"
+      - key: KC_DB
+        value: postgres
+      - key: KC_DB_URL_HOST
+        fromDatabase:
+          name: forestiq-db
+          property: host
+      - key: KC_DB_URL_PORT
+        fromDatabase:
+          name: forestiq-db
+          property: port
+      - key: KC_DB_URL_DATABASE
+        fromDatabase:
+          name: forestiq-db
+          property: database
+      - key: KC_DB_USERNAME
+        sync: false
+      - key: KC_DB_PASSWORD
+        sync: false
+      - key: KC_DB_SCHEMA
+        value: keycloak
+      - key: KC_DB_POOL_MAX_SIZE
+        value: "8"
+      - key: KC_BOOTSTRAP_ADMIN_USERNAME
+        value: forestiq-master-admin
+      - key: KC_BOOTSTRAP_ADMIN_PASSWORD
+        generateValue: true
+      - key: FORESTIQ_WEB_URL
+        fromService:
+          type: web
+          name: forestiq-web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: FORESTIQ_INITIAL_ADMIN_PASSWORD
+        generateValue: true
+      - key: FORESTIQ_KEYCLOAK_ADMIN_CLIENT_SECRET
+        generateValue: true
+      - key: JAVA_OPTS_KC_HEAP
+        value: "-XX:InitialRAMPercentage=20.0 -XX:MaxRAMPercentage=60.0"
+
+  # HTTP-only API runtime. Manual actions enqueue durable commands. Provider
+  # configuration and execution credentials are intentionally worker-only.
+  - type: web
+    name: forestiq-api
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    branch: main
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeployTrigger: off
+    healthCheckPath: /actuator/health/readiness
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: SERVER_PORT
+        value: "8080"
+      - key: SPRING_PROFILES_ACTIVE
+        value: core
+      - key: FORESTIQ_RUNTIME_ROLE
+        value: api
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: DATABASE_POOL_SIZE
+        value: "5"
+      - key: SPRING_FLYWAY_ENABLED
+        value: "false"
+      - key: CORS_ALLOWED_ORIGINS
+        fromService:
+          type: web
+          name: forestiq-web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: KEYCLOAK_PUBLIC_URL
+        fromService:
+          type: web
+          name: forestiq-keycloak
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: KEYCLOAK_REALM
+        value: forestiq
+      - key: KEYCLOAK_ADMIN_REALM
+        value: forestiq
+      - key: KEYCLOAK_ADMIN_CLIENT_ID
+        value: forestiq-admin-api
+      - key: KEYCLOAK_ADMIN_CLIENT_SECRET
+        fromService:
+          type: web
+          name: forestiq-keycloak
+          envVarKey: FORESTIQ_KEYCLOAK_ADMIN_CLIENT_SECRET
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: us-east-1
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_PATH_STYLE_ACCESS
+        value: "false"
+      - key: SENTRY_DSN
+        sync: false
+      - key: FORESTIQ_NOTIFICATIONS_APP_BASE_URL
+        fromService:
+          type: web
+          name: forestiq-web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: FORESTIQ_NOTIFICATIONS_FROM
+        sync: false
+      - key: FORESTIQ_NOTIFICATIONS_SCAN_DELAY_MS
+        value: "60000"
+      - key: SPRING_MAIL_HOST
+        sync: false
+      - key: SPRING_MAIL_PORT
+        value: "587"
+      - key: SPRING_MAIL_USERNAME
+        sync: false
+      - key: SPRING_MAIL_PASSWORD
+        sync: false
+      - key: SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH
+        value: "true"
+      - key: SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE
+        value: "true"
+
+  # Python scheduler is an enqueue-only queue producer. It has no provider
+  # credentials and uses a PostgreSQL lease for single-active ownership.
+  - type: worker
+    name: forestiq-ingest-scheduler
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    branch: main
+    rootDir: ingest
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m forestiq_ingest.scheduler
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 300
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: FORESTIQ_INGEST_COMPONENT
+        value: scheduler
+      - key: FORESTIQ_INGEST_ENABLED_JOB_KEYS
+        value: OWNER_CADASTRE_RELATIONS,WEASEL_OWNERSHIP_TRANSITIONS,INHERITANCE_NOTICES
+      - key: FORESTIQ_INGEST_SCHEDULER_POLL_SECONDS
+        value: "30"
+      - key: FORESTIQ_INGEST_SCHEDULER_LEASE_SECONDS
+        value: "90"
+      - key: FORESTIQ_INGEST_MAX_CATCHUP_WINDOWS
+        value: "2"
+
+  # Python worker owns provider execution and GDAL dependencies. The database URL
+  # is the separately provisioned forestiq_ingest role, not the API credential.
+  - type: worker
+    name: forestiq-ingest-worker
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    branch: main
+    rootDir: ingest
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m forestiq_ingest.worker
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 300
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: FORESTIQ_INGEST_COMPONENT
+        value: worker
+      - key: FORESTIQ_INGEST_ENABLED_JOB_KEYS
+        value: OWNER_CADASTRE_RELATIONS,WEASEL_OWNERSHIP_TRANSITIONS,INHERITANCE_NOTICES
+      - key: FORESTIQ_INGEST_WORKER_ID
+        value: render-worker-1
+      - key: FORESTIQ_INGEST_WORKER_POLL_SECONDS
+        value: "2"
+      - key: FORESTIQ_INGEST_HEARTBEAT_SECONDS
+        value: "15"
+      - key: FORESTIQ_INGEST_LEASE_SECONDS
+        value: "90"
+      - key: FORESTIQ_INGEST_TEMP_DIR
+        value: /tmp/forestiq-ingest
+      - key: METSIS_PORTFOLIO_URI
+        sync: false
+      - key: METSIS_PORTFOLIO_AUTHORIZATION
+        sync: false
+      - key: METSIS_PORTFOLIO_ORGANIZATION_ID
+        sync: false
+      - key: WEASEL_API_BASE_URL
+        sync: false
+      - key: WEASEL_API_ACCESS_TOKEN
+        sync: false
+      - key: WEASEL_ORGANIZATION_ID
+        sync: false
+      - key: METSAREGISTER_WFS_URL
+        value: https://gsavalik.envir.ee/geoserver/metsaregister/ows
+      - key: MARU_CADASTRE_SNAPSHOT_URL
+        value: https://s3.pilw.io/rp-kemit-kataster/ANDMED/Eesti_KATASTER_GPKG.zip
+      - key: GEOSPATIAL_DOWNLOAD_DIR
+        value: /tmp/forestiq-ingest/cadastre
+      - key: INHERITANCE_SOURCE_BASE_URL
+        sync: false
+      - key: INHERITANCE_SOURCE_API_TOKEN
+        sync: false
+      - key: INHERITANCE_SOURCE_URI_TEMPLATE
+        value: https://www.ametlikudteadaanded.ee/ee/-/parimisteated/parimismenetluse-algatamine/%04d/%02d/%02d/xml
+
+  # Keep the production Next.js server responsive; free services can idle-suspend.
+  - type: web
+    name: forestiq-web
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    branch: main
+    rootDir: frontend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeployTrigger: off
+    healthCheckPath: /login
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: INTERNAL_API_BASE_URL
+        fromService:
+          type: web
+          name: forestiq-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: /api
+      - key: NEXT_PUBLIC_KEYCLOAK_URL
+        fromService:
+          type: web
+          name: forestiq-keycloak
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: KEYCLOAK_INTERNAL_URL
+        fromService:
+          type: web
+          name: forestiq-keycloak
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: NEXT_PUBLIC_KEYCLOAK_REALM
+        value: forestiq
+      - key: NEXT_PUBLIC_KEYCLOAK_CLIENT_ID
+        value: forestiq-web
+      - key: NEXT_PUBLIC_MAPTILER_KEY
+        sync: false
+
+databases:
+  # Paid Postgres is durable and receives Render point-in-time recovery. Free
+  # Postgres expires and has no managed backup/recovery, so it is not production-safe.
+  - name: forestiq-db
+    plan: basic-256mb
+    region: frankfurt
+    postgresMajorVersion: "17"
+    databaseName: forestiq
+    user: forestiq
+    ipAllowList: []
+
+# Do not automatically create paid preview copies or run ingestion from previews.
+previews:
+  generation: off

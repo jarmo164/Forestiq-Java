@@ -1,0 +1,64 @@
+.idea
+*.iml
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Build outputs
+build
+dist
+out
+backend/.gradle/
+backend/build/
+backend/out/
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+*.tar
+.gradle
+venv
+node_modules/
+coverage/
+tmp/
+infra/data/
+data/
+
+# Runtime/local files
+.run/
+var/geospatial/
+*.log
+*.pid
+performance/baselines/*.local.txt
+
+# Generated/private data exports
+Andmed/
+Eesti_KATASTER_CSV.csv
+*.csv
+*.csv.gz
+*.xlsx
+*.xls
+
+# Large geospatial source artifacts (runtime/object storage only)
+*.tif
+*.tiff
+*.las
+*.laz
+
+# Secrets and local certificates
+*.pem
+*.key
+*.p12
+*.jks
+!metsis-ee-api/src/test/resources/test-priv.key
+!metsis-ee-api/src/test/resources/test-pub.key
+
+__pycache__/
+*.py[cod]
+forest-plan-discovery-work-folder
+
+# TypeScript incremental cache
+frontend/*.tsbuildinfo

@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "paths": [
+    {
+      "id": "owner_search",
+      "adapter": "ee.forestiq.owner.OwnerCursorService",
+      "characterizationTest": "backend/src/test/java/ee/forestiq/owner/OwnerCursorServiceTest.java",
+      "benchmark": "performance/k6/backend-smoke.js#owner-search",
+      "dbOperation": "owner_search",
+      "queryPlan": "owner_search",
+      "invariant": "organization and assignment scope are applied before keyset results are returned"
+    },
+    {
+      "id": "parcel_detail",
+      "adapter": "ee.forestiq.cadastre.GenerationMapTileRepository",
+      "characterizationTest": "backend/src/test/java/ee/forestiq/cadastre/GenerationMapTileRepositoryIntegrationTest.java",
+      "benchmark": "performance/k6/backend-smoke.js#parcel-detail",
+      "dbOperation": "parcel_detail",
+      "queryPlan": "cadastral_lookup",
+      "invariant": "published generation and tenant visibility remain part of the lookup"
+    },
+    {
+      "id": "protected_mvt",
+      "adapter": "ee.forestiq.cadastre.MapTileService",
+      "characterizationTest": "backend/src/test/java/ee/forestiq/cadastre/MapTileServiceCacheTest.java",
+      "benchmark": "performance/k6/backend-smoke.js#protected-mvt",
+      "dbOperation": "protected_mvt",
+      "queryPlan": "protected_mvt",
+      "invariant": "organization, visibility scope and generation are resolved before cache/admission"
+    },
+    {
+      "id": "durable_integration_enqueue",
+      "adapter": "ee.forestiq.integration.IntegrationJobService",
+      "characterizationTest": "backend/src/test/java/ee/forestiq/integration/IntegrationJobServiceTest.java",
+      "benchmark": "performance/k6/backend-smoke.js#durable-enqueue",
+      "dbOperation": "durable_queue",
+      "queryPlan": "durable_queue",
+      "invariant": "request and scheduler paths enqueue durable rows without provider network I/O"
+    },
+    {
+      "id": "registry_ingest_api_boundary",
+      "adapter": "scripts/validate_api_ingest_boundary.py",
+      "characterizationTest": "scripts/test_api_ingest_boundary.py",
+      "benchmark": "scripts/perf/run_query_plan_gate.py#stale-registry",
+      "dbOperation": "stale_registry",
+      "queryPlan": "stale_registry",
+      "invariant": "provider batch ingestion remains outside the Spring request path"
+    }
+  ]
+}

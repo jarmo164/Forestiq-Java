@@ -1,0 +1,31 @@
+Pager usage is off.
+Timing is on.
+      table_name       | n_live_tup | n_dead_tup | seq_scan | idx_scan | total_size 
+-----------------------+------------+------------+----------+----------+------------
+ owner_parcel_relation |          0 |          0 |      732 |   590670 | 1475 MB
+ land_parcel           |          0 |          0 |        1 |     1821 | 1062 MB
+ owner                 |          0 |          0 |      731 |   583347 | 949 MB
+ registry_sync_log     |          0 |          0 |        1 |        0 | 303 MB
+(4 rows)
+
+Time: 35.651 ms
+        relname        | heap_blks_read | heap_blks_hit | heap_cache_hit_pct | idx_blks_read | idx_blks_hit 
+-----------------------+----------------+---------------+--------------------+---------------+--------------
+ land_parcel           |       17465861 |      65059703 |              78.84 |        310155 |      1065889
+ owner                 |        6212063 |       1218817 |              16.40 |        159415 |      1864901
+ owner_parcel_relation |        6120060 |        387586 |               5.96 |        243223 |      2119507
+(3 rows)
+
+Time: 3.978 ms
+ datname  | numbackends | xact_commit | xact_rollback | blks_read | blks_hit | temp_files | temp_bytes | blk_read_time | blk_write_time 
+----------+-------------+-------------+---------------+-----------+----------+------------+------------+---------------+----------------
+ forestiq |          11 |        2338 |           609 |  30463215 | 71797534 |      11831 | 24 GB      |             0 |              0
+(1 row)
+
+Time: 3.604 ms
+ wal_records | wal_fpi | wal_bytes 
+-------------+---------+-----------
+   156514104 | 6748748 | 56 GB
+(1 row)
+
+Time: 1.341 ms

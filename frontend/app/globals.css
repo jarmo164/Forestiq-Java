@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 210 28% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 210 28% 13%;
+    --primary: 151 46% 25%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 144 20% 93%;
+    --secondary-foreground: 151 46% 20%;
+    --muted: 210 18% 94%;
+    --muted-foreground: 215 16% 45%;
+    --accent: 39 90% 93%;
+    --accent-foreground: 28 68% 25%;
+    --destructive: 0 73% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 18% 87%;
+    --input: 214 18% 87%;
+    --ring: 151 46% 35%;
+    --radius: 0.65rem;
+  }
+
+  * { @apply border-border; }
+  body { @apply min-h-screen bg-background text-foreground antialiased; }
+}
+
+.maplibregl-map { font-family: inherit; }

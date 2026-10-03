@@ -1,0 +1,4 @@
+# ForestIQ production ingestion dependency audit constraints.
+# Keep direct runtime dependencies pinned for deterministic pip-audit installation.
+httpx==0.28.1
+psycopg[binary,pool]==3.3.6

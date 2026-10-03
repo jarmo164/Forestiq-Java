@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "source_url": "https://gsavalik.envir.ee/geoserver/metsaregister/ows",
+  "layers": [
+    {"name":"metsaregister:eraldis","title":"Metsaregistri eraldised","identity":["sys_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:eraldis_element","title":"Metsaregistri eraldiste puistu koosseis","identity":["sys_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:isearasused","title":"Iseärasused","identity":["eraldis_id","kood"],"approved":true,"enabled":true},
+    {"name":"metsaregister:kahjustused","title":"Kahjustused","identity":["eraldis_id","puuliigi_kood","kvanus","pohjuse_kood","osakaal","rinde_kood","__feature_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:katsealad","title":"Katsealad","identity":["id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:kl_kasvukoht","title":"Klassifikaator: Metsa kasvukohatüübid","identity":["kood"],"approved":true,"enabled":true},
+    {"name":"metsaregister:kl_omandivorm","title":"Klassifikaator: Omandivorm","identity":["kood"],"approved":true,"enabled":true},
+    {"name":"metsaregister:kl_puuliik","title":"Klassifikaator: Puuliigid","identity":["kood"],"approved":true,"enabled":true},
+    {"name":"metsaregister:kl_rinne","title":"Klassifikaator: Puistu rinded","identity":["kood"],"approved":true,"enabled":true},
+    {"name":"metsaregister:kuusekooreyrask_mke","title":"Metsakaitseekspertiisid kuuse-kooreüraski kahjustusega aladel","identity":["sys_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:mke","title":"Raie soovitusega metsakaitseekspertiisid","identity":["sys_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:mke_arhiiv","title":"Arhiveeritud metsakaitseekspertiisi alad","identity":["sys_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:mr__teema_raie_diameeter","title":"Raieküpsus: diameeter","identity":["sys_id","__feature_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:mr__teema_raie_liik","title":"Raieküpsus: liik","identity":["sys_id","__feature_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:mr__teema_raie_taius","title":"Raieküpsus: täius","identity":["sys_id","__feature_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:mr__teema_raie_vanus","title":"Raieküpsus: vanus","identity":["sys_id","__feature_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:mue","title":"Metsa uuendamise ekspertiisid MUE","identity":["sys_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:natura_2000_alad","title":"Natura 2000 alad","identity":["sys_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:pesitsusrahu_maatriks","title":"Pesitsusrahu maatriks","identity":["sys_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:raadatud_metsateatised","title":"Raadatud metsateatised","identity":["sys_id"],"approved":false,"enabled":false,"note":"Provider advertises the layer but anonymous GetFeature returned HTTP 401 on 2026-09-01"},
+    {"name":"metsaregister:teatis","title":"Kehtivad metsateatised","identity":["sys_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:teatis_arhiiv","title":"Arhiveeritud avalikud metsateatised","identity":["sys_id"],"approved":true,"enabled":true},
+    {"name":"metsaregister:yp_kaitsemets","title":"ÜP Kaitsemetsad","identity":["sys_id"],"approved":true,"enabled":true}
+  ]
+}

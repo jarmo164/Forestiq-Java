@@ -1,0 +1,600 @@
+name: Heavy CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_call:
+    inputs:
+      run_heavy:
+        description: Run the self-hosted heavy implementation jobs.
+        required: false
+        type: boolean
+        default: true
+      approved_pr_number:
+        description: Fork PR number explicitly approved by a maintainer for Heavy CI.
+        required: false
+        type: string
+        default: ""
+      approved_head_sha:
+        description: Exact fork PR head SHA approved for Heavy CI.
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      run_heavy:
+        description: Run the self-hosted heavy implementation jobs.
+        required: false
+        type: boolean
+        default: true
+      approved_pr_number:
+        description: Fork PR number explicitly approved by a maintainer for Heavy CI.
+        required: false
+        type: string
+        default: ""
+      approved_head_sha:
+        description: Exact fork PR head SHA approved for Heavy CI.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: heavy-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  HEAVY_RUNNER_LABELS: '["self-hosted","macOS","ARM64","forestiq","heavy-ci"]'
+
+jobs:
+  changes:
+    name: Heavy change classification
+    # Fork PRs stay on GitHub-hosted infrastructure. Trusted same-repo/manual runs
+    # can classify on the repository-scoped Mac Studio when hosted capacity is unavailable.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || fromJSON('["self-hosted","macOS","ARM64","forestiq","heavy-ci"]') }}
+    timeout-minutes: 5
+    outputs:
+      heavy: ${{ steps.paths.outputs.heavy }}
+      performance_profile: ${{ steps.paths.outputs.performance_profile }}
+      required_integration_tests: ${{ steps.paths.outputs.required_integration_tests }}
+      required_performance_evidence: ${{ steps.paths.outputs.required_performance_evidence }}
+      trusted: ${{ steps.trust.outputs.trusted }}
+      checkout_ref: ${{ steps.trust.outputs.checkout_ref }}
+      approved_head_sha: ${{ steps.trust.outputs.approved_head_sha }}
+      changed_files: ${{ steps.paths.outputs.changed_files }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Verify Heavy CI runner trust boundary
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]]; then
+            [[ "${RUNNER_OS}" == "Linux" ]] || { echo "::error::Fork PR classifier must remain hosted."; exit 1; }
+          else
+            [[ "${RUNNER_OS}" == "macOS" && "${RUNNER_ARCH}" == "ARM64" ]] || {
+              echo "::error::Trusted Heavy CI requires the repository-scoped macOS ARM64 runner.";
+              exit 1;
+            }
+          fi
+      - name: Decide whether self-hosted execution is trusted
+        id: trust
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_PR_NUMBER: ${{ inputs.approved_pr_number }}
+          APPROVED_HEAD_SHA: ${{ inputs.approved_head_sha }}
+        run: |
+          set -Eeuo pipefail
+          echo "approved_head_sha=" >> "$GITHUB_OUTPUT"
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "checkout_ref=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            if [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]]; then
+              echo "trusted=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Fork PR code is blocked from self-hosted execution until an exact head SHA is maintainer-approved."
+            else
+              echo "trusted=true" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$APPROVED_PR_NUMBER" ]]; then
+            [[ "$APPROVED_PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "::error::approved_pr_number must be numeric"; exit 1; }
+            [[ "$APPROVED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::approved_head_sha must be a full 40-character SHA"; exit 1; }
+
+            pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${APPROVED_PR_NUMBER}")"
+            actual_head="$(jq -r '.head.sha' <<<"$pr_json")"
+            head_repo="$(jq -r '.head.repo.full_name' <<<"$pr_json")"
+            merge_sha="$(jq -r '.merge_commit_sha // empty' <<<"$pr_json")"
+            state="$(jq -r '.state' <<<"$pr_json")"
+
+            [[ "$state" == "open" ]] || { echo "::error::Approved PR is not open"; exit 1; }
+            [[ "$head_repo" != "${GITHUB_REPOSITORY}" ]] || { echo "::error::Approval inputs are reserved for fork PRs"; exit 1; }
+            [[ "$actual_head" == "$APPROVED_HEAD_SHA" ]] || {
+              echo "::error::Fork PR head changed: approved=$APPROVED_HEAD_SHA actual=$actual_head"
+              exit 1
+            }
+            [[ "$merge_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::GitHub did not provide a merge commit for the approved PR"; exit 1; }
+
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+            echo "checkout_ref=$merge_sha" >> "$GITHUB_OUTPUT"
+            echo "approved_head_sha=$actual_head" >> "$GITHUB_OUTPUT"
+            echo "::notice::Maintainer-approved fork PR #$APPROVED_PR_NUMBER head $actual_head will run as exact merge commit $merge_sha."
+            exit 0
+          fi
+
+          echo "trusted=true" >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Decide whether heavy verification is required
+        id: paths
+        shell: bash
+        env:
+          REQUESTED_RUN_HEAVY: ${{ inputs.run_heavy }}
+        run: |
+          set -Eeuo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            bash scripts/ci/classify-changes.sh \
+              "pull_request" \
+              "${{ github.event.pull_request.base.sha }}" \
+              "${{ github.sha }}"
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            base="${{ github.event.before }}"
+            if [[ "$base" =~ ^[0-9a-f]{40}$ && "$base" != "0000000000000000000000000000000000000000" ]]; then
+              bash scripts/ci/classify-changes.sh "pull_request" "$base" "${{ github.sha }}"
+            else
+              bash scripts/ci/classify-changes.sh "push" "" "${{ github.sha }}"
+            fi
+          else
+            # Manual/reusable execution has no trustworthy diff base, so classify
+            # fail-closed as the full performance profile.
+            bash scripts/ci/classify-changes.sh "${{ github.event_name }}" "" "${{ github.sha }}"
+            if [[ "${REQUESTED_RUN_HEAVY:-true}" == "false" ]]; then
+              echo "heavy=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  runner-preflight:
+    name: Mac Studio runner preflight
+    needs: changes
+    if: ${{ needs.changes.outputs.heavy == 'true' && needs.changes.outputs.trusted == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64, forestiq, heavy-ci]
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.changes.outputs.checkout_ref }}
+      - name: Verify runner capacity and service
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUNNER_OS}" == "macOS" && "${RUNNER_ARCH}" == "ARM64" ]] || {
+            echo "::error::Heavy CI requires the ForestIQ macOS ARM64 runner."
+            exit 1
+          }
+          for tool in git docker node pnpm java python3; do
+            command -v "$tool" >/dev/null 2>&1 || {
+              echo "::error::Required runner tool is missing: $tool"
+              exit 1
+            }
+          done
+          docker info >/dev/null
+          docker compose version
+
+          # Reclaim stale ForestIQ/BuildKit data before checking capacity. Docker
+          # Desktop uses its own VM disk, so host free space alone is insufficient.
+          bash scripts/ci/cleanup-self-hosted.sh
+          docker system df
+
+          # Verify that Docker's own writable layer can actually allocate data.
+          # This catches Docker Desktop VM/disk-image exhaustion before Compose.
+          docker run --rm --platform linux/amd64 --entrypoint /bin/sh postgis/postgis:17-3.5 -ec '
+            df -h /var/lib/postgresql/data
+            mkdir -p /var/lib/postgresql/data/.forestiq-ci-write-check
+            printf ok > /var/lib/postgresql/data/.forestiq-ci-write-check/probe
+            rm -rf /var/lib/postgresql/data/.forestiq-ci-write-check
+          '
+
+          free_kb="$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')"
+          min_free_kb=$((20 * 1024 * 1024))
+          if (( free_kb < min_free_kb )); then
+            echo "::error::Mac Studio has less than 20 GiB free disk space in the runner filesystem."
+            df -h "$RUNNER_TEMP"
+            exit 1
+          fi
+          install_dir="${RUNNER_INSTALL_DIR:-$HOME/actions-runner}"
+          [[ -x "$install_dir/svc.sh" ]] || {
+            echo "::error::GitHub Actions service helper is missing at $install_dir/svc.sh"
+            exit 1
+          }
+          (cd "$install_dir" && ./svc.sh status)
+          python3 scripts/ci/runner_environment_security.py
+          if id -Gn | tr ' ' '\n' | grep -qx admin; then
+            echo "::warning::Runner account $(id -un) is still in the macOS admin group; #442 remains open until a dedicated non-admin CI account is proven."
+          fi
+          echo "Runner preflight passed: Docker, toolchain, service, secret environment and disk capacity are healthy."
+
+  backend-integration:
+    name: Backend integration / PostGIS
+    needs: [changes, runner-preflight]
+    if: ${{ needs.changes.outputs.heavy == 'true' && needs.changes.outputs.trusted == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64, forestiq, heavy-ci]
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.changes.outputs.checkout_ref }}
+      - name: Verify Docker runtime
+        run: docker info
+      - name: Set up Java 21
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - name: Run backend integration tests
+        working-directory: backend
+        run: ./gradlew --no-daemon integrationTest
+      - name: Upload backend integration diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: heavy-backend-integration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            backend/build/test-results/integrationTest/
+            backend/build/reports/tests/integrationTest/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Clean backend integration workspace
+        if: ${{ always() }}
+        shell: bash
+        run: bash scripts/ci/cleanup-self-hosted.sh
+
+  ingest-integration:
+    name: Ingestion integration / PostGIS
+    needs: [changes, runner-preflight]
+    if: ${{ needs.changes.outputs.heavy == 'true' && needs.changes.outputs.trusted == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64, forestiq, heavy-ci]
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.changes.outputs.checkout_ref }}
+      - name: Verify Docker runtime
+        run: docker info
+      - name: Prepare self-hosted Python runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import sys
+          print(sys.version)
+          if sys.version_info < (3, 13):
+              raise SystemExit("ForestIQ heavy CI requires Python >= 3.13")
+          PY
+          venv="$RUNNER_TEMP/forestiq-ingest-venv-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -rf "$venv"
+          python3 -m venv "$venv"
+          echo "PYTHON_BIN=$venv/bin/python" >> "$GITHUB_ENV"
+      - name: Install ingestion test dependencies
+        shell: bash
+        run: "$PYTHON_BIN -m pip install -e './ingest[test]'"
+      - name: Start disposable PostGIS
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          container="forestiq-ingest-it-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker rm -f "$container" >/dev/null 2>&1 || true
+          docker run --detach --platform linux/amd64 \
+            --name "$container" \
+            --env POSTGRES_DB=forestiq \
+            --env POSTGRES_USER=forestiq \
+            --env POSTGRES_PASSWORD=forestiq \
+            --publish 127.0.0.1::5432 \
+            postgis/postgis:17-3.5
+          echo "POSTGIS_CONTAINER=$container" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 60); do
+            if docker exec "$container" pg_isready -U forestiq -d forestiq >/dev/null 2>&1; then
+              port="$(docker port "$container" 5432/tcp | tail -1 | awk -F: '{print $NF}')"
+              echo "TEST_POSTGIS_URL=postgresql://forestiq:forestiq@127.0.0.1:${port}/forestiq" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs "$container" || true
+          exit 1
+      - name: Run PostGIS integration tests
+        working-directory: ingest
+        run: |
+          mkdir -p artifacts
+          "$PYTHON_BIN" -m pytest -m integration --junitxml=artifacts/integration.xml
+      - name: Upload ingestion integration diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: heavy-ingest-integration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ingest/artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Clean ingestion integration workspace
+        if: ${{ always() }}
+        shell: bash
+        run: bash scripts/ci/cleanup-self-hosted.sh
+
+
+  metsaregister-integration:
+    name: Metsaregister integration / PostGIS
+    needs: [changes, runner-preflight]
+    if: ${{ needs.changes.outputs.heavy == 'true' && needs.changes.outputs.trusted == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64, forestiq, heavy-ci]
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.changes.outputs.checkout_ref }}
+      - name: Verify Docker runtime
+        run: docker info
+      - name: Prepare self-hosted Python runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import sys
+          print(sys.version)
+          if sys.version_info < (3, 13):
+              raise SystemExit("ForestIQ heavy CI requires Python >= 3.13")
+          PY
+          venv="$RUNNER_TEMP/forestiq-metsaregister-venv-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -rf "$venv"
+          python3 -m venv "$venv"
+          echo "PYTHON_BIN=$venv/bin/python" >> "$GITHUB_ENV"
+      - name: Install Metsaregister test dependencies
+        shell: bash
+        run: "$PYTHON_BIN -m pip install -r scripts/metsaregister/requirements-dev.txt"
+      - name: Start disposable PostGIS
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          container="forestiq-metsaregister-it-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker rm -f "$container" >/dev/null 2>&1 || true
+          docker run --detach --platform linux/amd64 \
+            --name "$container" \
+            --env POSTGRES_DB=forestiq \
+            --env POSTGRES_USER=forestiq \
+            --env POSTGRES_PASSWORD=forestiq \
+            --publish 127.0.0.1::5432 \
+            postgis/postgis:17-3.5
+          for attempt in $(seq 1 60); do
+            if docker exec "$container" pg_isready -U forestiq -d forestiq >/dev/null 2>&1; then
+              port="$(docker port "$container" 5432/tcp | tail -1 | awk -F: '{print $NF}')"
+              echo "TEST_POSTGIS_URL=postgresql://forestiq:forestiq@127.0.0.1:${port}/forestiq" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs "$container" || true
+          exit 1
+      - name: Run Metsaregister PostGIS tests
+        shell: bash
+        run: |
+          mkdir -p artifacts/metsaregister
+          "$PYTHON_BIN" -m pytest -q scripts/metsaregister/tests \
+            --junitxml=artifacts/metsaregister/pytest.xml
+      - name: Upload Metsaregister diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: heavy-metsaregister-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/metsaregister/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Clean Metsaregister integration workspace
+        if: ${{ always() }}
+        shell: bash
+        run: bash scripts/ci/cleanup-self-hosted.sh
+
+  api-contract:
+    name: OpenAPI contract / generated client
+    needs: [changes, runner-preflight]
+    if: ${{ needs.changes.outputs.heavy == 'true' && needs.changes.outputs.trusted == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64, forestiq, heavy-ci]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.changes.outputs.checkout_ref }}
+      - name: Verify Docker runtime
+        run: docker info
+      - name: Set up Java 21
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.4
+          run_install: false
+      - name: Set up Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Verify self-hosted Python runtime
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import sys
+          print(sys.version)
+          if sys.version_info < (3, 13):
+              raise SystemExit("ForestIQ heavy CI requires Python >= 3.13")
+          PY
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Start disposable PostGIS
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          container="forestiq-openapi-it-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker rm -f "$container" >/dev/null 2>&1 || true
+          docker run --detach --platform linux/amd64 \
+            --name "$container" \
+            --env POSTGRES_DB=forestiq \
+            --env POSTGRES_USER=forestiq \
+            --env POSTGRES_PASSWORD=forestiq \
+            --publish 127.0.0.1::5432 \
+            postgis/postgis:17-3.5
+          for attempt in $(seq 1 60); do
+            if docker exec "$container" pg_isready -U forestiq -d forestiq >/dev/null 2>&1; then
+              port="$(docker port "$container" 5432/tcp | tail -1 | awk -F: '{print $NF}')"
+              echo "OPENAPI_DB_PORT=$port" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs "$container" || true
+          exit 1
+      - name: Start API for OpenAPI generation
+        working-directory: backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          api_port="$(python3 - <<'PY'
+          import socket
+          with socket.socket() as sock:
+              sock.bind(("127.0.0.1", 0))
+              print(sock.getsockname()[1])
+          PY
+          )"
+          echo "OPENAPI_API_PORT=$api_port" >> "$GITHUB_ENV"
+          export SERVER_PORT="$api_port"
+          export DATABASE_URL="jdbc:postgresql://127.0.0.1:${OPENAPI_DB_PORT}/forestiq"
+          export DATABASE_USERNAME=forestiq
+          export DATABASE_PASSWORD=forestiq
+          export FLYWAY_DATABASE_URL="$DATABASE_URL"
+          export FLYWAY_DATABASE_USERNAME=forestiq
+          export FLYWAY_DATABASE_PASSWORD=forestiq
+          export CORS_ALLOWED_ORIGINS=http://localhost:3000
+          export KEYCLOAK_ISSUER_URI=https://example.invalid/realms/forestiq
+          export KEYCLOAK_JWK_SET_URI=https://example.invalid/certs
+          export KEYCLOAK_ADMIN_BASE_URL=https://example.invalid
+          export KEYCLOAK_ADMIN_REALM=forestiq
+          export KEYCLOAK_ADMIN_CLIENT_SECRET=contract-only
+          export S3_ENDPOINT=https://example.invalid
+          export S3_ACCESS_KEY=contract
+          export S3_SECRET_KEY=contract-only
+          export S3_BUCKET=forestiq-contract
+          export REGISTRY_AUTO_REFRESH_ENABLED=false
+          export INHERITANCE_SOURCE_AUTO_REFRESH_ENABLED=false
+          export METSIS_PORTFOLIO_AUTO_SYNC_ENABLED=false
+          export WEASEL_AUTO_REFRESH_ENABLED=false
+          ./gradlew --no-daemon bootRun > ../openapi-backend.log 2>&1 &
+          echo $! > ../openapi-backend.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${api_port}/actuator/health/readiness" >/dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat ../openapi-backend.pid)" 2>/dev/null; then
+              cat ../openapi-backend.log
+              exit 1
+            fi
+            sleep 2
+          done
+          cat ../openapi-backend.log
+          exit 1
+      - name: Regenerate and verify OpenAPI client
+        working-directory: frontend
+        shell: bash
+        run: |
+          OPENAPI_URL="http://127.0.0.1:${OPENAPI_API_PORT}/api/openapi" pnpm verify:api-contract
+          pnpm typecheck
+      - name: Upload OpenAPI drift diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: heavy-openapi-contract-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            backend/build/openapi/forestiq-openapi.json
+            frontend/lib/generated/openapi.d.ts
+            frontend/lib/generated/client.ts
+            openapi-backend.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Stop API and clean contract workspace
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          if [[ -f openapi-backend.pid ]]; then
+            kill "$(cat openapi-backend.pid)" 2>/dev/null || true
+          fi
+          bash scripts/ci/cleanup-self-hosted.sh
+
+  e2e:
+    name: Playwright / Compose
+    needs: [changes, runner-preflight]
+    if: ${{ needs.changes.outputs.heavy == 'true' && needs.changes.outputs.trusted == 'true' }}
+    uses: ./.github/workflows/e2e-compose.yml
+    with:
+      runner_labels: '["self-hosted","macOS","ARM64","forestiq","heavy-ci"]'
+      checkout_ref: ${{ needs.changes.outputs.checkout_ref }}
+      performance_profile: ${{ needs.changes.outputs.performance_profile }}
+
+  heavy-quality-gate:
+    name: heavy-quality-gate
+    if: ${{ always() }}
+    needs:
+      - changes
+      - runner-preflight
+      - backend-integration
+      - ingest-integration
+      - metsaregister-integration
+      - api-contract
+      - e2e
+    # Never execute fork PR code on the persistent runner. Same-repo/manual gates
+    # use the Mac Studio so hosted-runner outages do not suppress the canonical result.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || fromJSON('["self-hosted","macOS","ARM64","forestiq","heavy-ci"]') }}
+    timeout-minutes: 5
+    steps:
+      - name: Checkout gate policy
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Require heavy classifier/result consistency
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${{ needs.changes.result }}" != "success" ]]; then
+            echo "::error::Heavy change classification failed."
+            exit 1
+          fi
+          if [[ "${{ needs.changes.outputs.heavy }}" == "true" && "${{ needs.changes.outputs.trusted }}" != "true" ]]; then
+            echo "::error::This fork PR requires maintainer-approved exact-SHA Heavy CI."
+            exit 1
+          fi
+          if [[ "${{ needs.changes.outputs.heavy }}" == "true" && "${{ needs.changes.outputs.trusted }}" == "true" && "${{ needs.runner-preflight.result }}" != "success" ]]; then
+            echo "::error::Mac Studio runner preflight did not pass: ${{ needs.runner-preflight.result }}"
+            exit 1
+          fi
+          python3 scripts/ci/validate_gate_results.py \
+            --changed-files "${{ needs.changes.outputs.changed_files }}" \
+            --job "backend-integration:${{ needs.changes.outputs.heavy }}:${{ needs.backend-integration.result }}" \
+            --job "ingest-integration:${{ needs.changes.outputs.heavy }}:${{ needs.ingest-integration.result }}" \
+            --job "metsaregister-integration:${{ needs.changes.outputs.heavy }}:${{ needs.metsaregister-integration.result }}" \
+            --job "api-contract:${{ needs.changes.outputs.heavy }}:${{ needs.api-contract.result }}" \
+            --job "e2e:${{ needs.changes.outputs.heavy }}:${{ needs.e2e.result }}"

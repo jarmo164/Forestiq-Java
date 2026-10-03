@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "key": "metsaregister",
+      "issue": 363,
+      "evidence_file": "metsaregister.json",
+      "java_candidates": ["MetsaregisterWfsMirrorService", "MetsaregisterWfsClient"],
+      "retain": []
+    },
+    {
+      "key": "cadastre_geospatial",
+      "issue": 364,
+      "evidence_file": "cadastre-geospatial.json",
+      "java_candidates": ["CadastreGenerationImportService", "PublicDatasetBootstrapService"],
+      "retain": []
+    },
+    {
+      "key": "owner_flows",
+      "issue": 365,
+      "evidence_file": "owner-flows.json",
+      "java_candidates": ["MetsisPortfolioSyncService"],
+      "retain": []
+    },
+    {
+      "key": "rik_metsis",
+      "issue": 372,
+      "evidence_file": "rik-metsis.json",
+      "java_candidates": [],
+      "retain": ["RIK object count SOAP call"]
+    }
+  ]
+}

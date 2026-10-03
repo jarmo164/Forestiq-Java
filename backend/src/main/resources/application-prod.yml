@@ -1,0 +1,39 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+
+forestiq:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  storage:
+    endpoint: ${S3_ENDPOINT}
+    region: ${S3_REGION:us-east-1}
+    bucket: ${S3_BUCKET}
+    access-key: ${S3_ACCESS_KEY}
+    secret-key: ${S3_SECRET_KEY}
+    path-style-access: ${S3_PATH_STYLE_ACCESS:false}
+  keycloak-admin:
+    base-url: ${KEYCLOAK_ADMIN_BASE_URL}
+    realm: ${KEYCLOAK_ADMIN_REALM}
+    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+
+# Optional integrations stay disabled unless explicitly configured. If enabled,
+# ProductionConfigurationGuard requires their endpoint/credentials at startup.

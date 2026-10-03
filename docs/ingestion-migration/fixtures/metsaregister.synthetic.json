@@ -1,0 +1,112 @@
+{
+  "fixtureVersion": 1,
+  "source": "METSAREGISTER_WFS",
+  "jobKey": "METSAREGISTER_WFS_MIRROR",
+  "crs": "EPSG:3301",
+  "provider": {
+    "numberMatched": 3,
+    "pageSize": 2,
+    "pages": [
+      {
+        "startIndex": 0,
+        "features": [
+          {
+            "layer": "metsaregister:teatis",
+            "sourceId": "teatis.1001",
+            "cadastreCode": "12345:678:0001",
+            "geometry": {
+              "type": "Polygon",
+              "bbox": [
+                541000,
+                6439000,
+                541250,
+                6439250
+              ]
+            },
+            "attributes": {
+              "noticeNumber": "MR-1001",
+              "decision": "APPROVED"
+            }
+          },
+          {
+            "layer": "metsaregister:eraldis",
+            "sourceId": "eraldis.2001",
+            "cadastreCode": "12345:678:0001",
+            "geometry": {
+              "type": "MultiPolygon",
+              "bbox": [
+                541020,
+                6439020,
+                541220,
+                6439220
+              ]
+            },
+            "attributes": {
+              "compartmentNumber": "7",
+              "areaHa": "4.2500"
+            }
+          }
+        ]
+      },
+      {
+        "startIndex": 2,
+        "features": [
+          {
+            "layer": "metsaregister:teatis",
+            "sourceId": "teatis.1002",
+            "cadastreCode": "12345:678:0002",
+            "geometry": {
+              "type": "Polygon",
+              "bbox": [
+                542000,
+                6438000,
+                542200,
+                6438200
+              ]
+            },
+            "attributes": {
+              "noticeNumber": "MR-1002",
+              "decision": "REGISTERED"
+            }
+          }
+        ]
+      },
+      {
+        "startIndex": 3,
+        "features": []
+      }
+    ]
+  },
+  "expected": {
+    "rows": 3,
+    "uniqueSourceIds": 3,
+    "duplicates": 0,
+    "invalidGeometries": 0,
+    "bbox": [
+      541000,
+      6438000,
+      542200,
+      6439250
+    ],
+    "complete": true,
+    "publishAllowed": true,
+    "stableIdSha256": "c70b82ac622c24e643c0336c77220b2308585ed7e8c30182f25a586797af2814"
+  },
+  "variants": {
+    "schemaDrift": {
+      "mutation": "remove required property attributes; add unknown geometry type",
+      "publishAllowed": false,
+      "errorClass": "SCHEMA_DRIFT"
+    },
+    "truncated": {
+      "mutation": "stop after first page while numberMatched=3",
+      "publishAllowed": false,
+      "errorClass": "INCOMPLETE_SNAPSHOT"
+    },
+    "duplicate": {
+      "mutation": "repeat sourceId teatis.1001 on page 2",
+      "publishAllowed": false,
+      "errorClass": "DUPLICATE_SOURCE_ID"
+    }
+  }
+}

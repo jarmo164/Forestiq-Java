@@ -1,0 +1,187 @@
+spring:
+  application:
+    name: forestiq-api
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:6432/forestiq}
+    username: ${DATABASE_USERNAME:forestiq}
+    password: ${DATABASE_PASSWORD:forestiq}
+    hikari:
+      maximum-pool-size: ${DATABASE_POOL_SIZE:10}
+      minimum-idle: 2
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    url: ${FLYWAY_DATABASE_URL:${DATABASE_URL:jdbc:postgresql://localhost:6432/forestiq}}
+    user: ${FLYWAY_DATABASE_USERNAME:${DATABASE_USERNAME:forestiq}}
+    password: ${FLYWAY_DATABASE_PASSWORD:${DATABASE_PASSWORD:forestiq}}
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cache:
+    type: redis
+    cache-names: owner-status-definitions
+    redis:
+      time-to-live: ${OWNER_STATUS_CACHE_TTL:5m}
+      cache-null-values: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:forestiq}
+    password: ${RABBITMQ_PASSWORD:forestiq}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/forestiq}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/forestiq/protocol/openid-connect/certs}
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  compression:
+    enabled: true
+    min-response-size: 1024
+    mime-types: application/json,application/problem+json,application/vnd.mapbox-vector-tile
+  error:
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLE_RATE:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+springdoc:
+  api-docs:
+    path: /api/openapi
+  swagger-ui:
+    path: /api/swagger-ui.html
+  packages-to-scan: ee.forestiq
+
+forestiq:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  storage:
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    region: ${S3_REGION:us-east-1}
+    bucket: ${S3_BUCKET:forestiq-documents}
+    access-key: ${S3_ACCESS_KEY:forestiq-minio}
+    secret-key: ${S3_SECRET_KEY:forestiq-minio-secret}
+    path-style-access: ${S3_PATH_STYLE_ACCESS:true}
+  keycloak-admin:
+    base-url: ${KEYCLOAK_ADMIN_BASE_URL:http://localhost:8180}
+    realm: ${KEYCLOAK_ADMIN_REALM:forestiq}
+    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:forestiq-admin-api}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:}
+  inheritance-source:
+    base-url: ${INHERITANCE_SOURCE_BASE_URL:}
+    api-token: ${INHERITANCE_SOURCE_API_TOKEN:}
+    uri-template: ${INHERITANCE_SOURCE_URI_TEMPLATE:https://www.ametlikudteadaanded.ee/ee/-/parimisteated/parimismenetluse-algatamine/%04d/%02d/%02d/xml}
+    user-agent: ${INHERITANCE_SOURCE_USER_AGENT:ForestIQ/2.0}
+    zone-id: ${INHERITANCE_SOURCE_ZONE_ID:Europe/Tallinn}
+    connect-timeout-seconds: ${INHERITANCE_SOURCE_CONNECT_TIMEOUT_SECONDS:10}
+    timeout-seconds: ${INHERITANCE_SOURCE_TIMEOUT_SECONDS:30}
+    auto-refresh-enabled: ${INHERITANCE_SOURCE_AUTO_REFRESH_ENABLED:false}
+    auto-refresh-fixed-delay-ms: ${INHERITANCE_SOURCE_AUTO_REFRESH_DELAY_MS:1800000}
+    auto-refresh-batch-size: ${INHERITANCE_SOURCE_AUTO_REFRESH_BATCH_SIZE:100}
+    max-backfill-days: ${INHERITANCE_SOURCE_MAX_BACKFILL_DAYS:31}
+  metsis-portfolio:
+    uri: ${METSIS_PORTFOLIO_URI:}
+    authorization: ${METSIS_PORTFOLIO_AUTHORIZATION:}
+    organization-id: ${METSIS_PORTFOLIO_ORGANIZATION_ID:}
+    timeout-seconds: ${METSIS_PORTFOLIO_TIMEOUT_SECONDS:30}
+    max-attempts: ${METSIS_PORTFOLIO_MAX_ATTEMPTS:3}
+    auto-sync-enabled: ${METSIS_PORTFOLIO_AUTO_SYNC_ENABLED:false}
+    auto-sync-fixed-delay-ms: ${METSIS_PORTFOLIO_AUTO_SYNC_DELAY_MS:86400000}
+    page-size: ${METSIS_PORTFOLIO_PAGE_SIZE:1000}
+    max-pages-per-run: ${METSIS_PORTFOLIO_MAX_PAGES_PER_RUN:5000}
+  weasel:
+    base-url: ${WEASEL_API_BASE_URL:}
+    access-token: ${WEASEL_API_ACCESS_TOKEN:}
+    organization-id: ${WEASEL_ORGANIZATION_ID:}
+    timeout-seconds: ${WEASEL_API_TIMEOUT_SECONDS:15}
+    max-attempts: ${WEASEL_API_MAX_ATTEMPTS:3}
+    auto-refresh-enabled: ${WEASEL_AUTO_REFRESH_ENABLED:false}
+    auto-refresh-fixed-delay-ms: ${WEASEL_AUTO_REFRESH_DELAY_MS:21600000}
+    page-size: ${WEASEL_PAGE_SIZE:100}
+    max-pages-per-run: ${WEASEL_MAX_PAGES_PER_RUN:10}
+    overlap-hours: ${WEASEL_OVERLAP_HOURS:6}
+    initial-lookback-days: ${WEASEL_INITIAL_LOOKBACK_DAYS:14}
+  registry:
+    maaamet:
+      wfs-url: ${MAAAMET_WFS_URL:https://gsavalik.envir.ee/geoserver/kataster/wfs}
+      basemap-tms-base-url: ${MAARUUM_BASEMAP_TMS_BASE_URL:https://tiles.maaamet.ee/tm/tms/1.0.0}
+      inaks-url: ${MAARUUM_INAKS_URL:https://aks.geoportaal.ee/inaks/inaadress/gazetteer}
+      map-institution: ${MAARUUM_MAP_INSTITUTION:ForestIQ}
+      map-system: ${MAARUUM_MAP_SYSTEM:ForestIQ}
+      map-environment: ${MAARUUM_MAP_ENVIRONMENT:local}
+      map-source-date: ${MAARUUM_MAP_SOURCE_DATE:}
+      ortofoto-source-date: ${MAARUUM_ORTOFOTO_SOURCE_DATE:}
+      hybrid-source-date: ${MAARUUM_HYBRID_SOURCE_DATE:}
+      relief-source-date: ${MAARUUM_RELIEF_SOURCE_DATE:}
+      relief-web-mercator-enabled: ${MAARUUM_RELIEF_WEB_MERCATOR_ENABLED:false}
+      connect-timeout-seconds: ${MAAAMET_WFS_TIMEOUT_SECONDS:15}
+      max-attempts: ${MAAAMET_WFS_MAX_ATTEMPTS:3}
+    metsaregister:
+      wfs-url: ${METSAREGISTER_WFS_URL:https://gsavalik.envir.ee/geoserver/metsaregister/ows}
+      connect-timeout-seconds: ${METSAREGISTER_WFS_TIMEOUT_SECONDS:15}
+      max-attempts: ${METSAREGISTER_WFS_MAX_ATTEMPTS:3}
+      page-size: ${METSAREGISTER_WFS_PAGE_SIZE:10000}
+      max-pages-per-query: ${METSAREGISTER_WFS_MAX_PAGES_PER_QUERY:1000}
+      sort-field: ${METSAREGISTER_WFS_SORT_FIELD:sys_id}
+      bulk-batch-size: ${METSAREGISTER_WFS_BULK_BATCH_SIZE:50}
+      bulk-pages-per-run: ${METSAREGISTER_WFS_BULK_PAGES_PER_RUN:10}
+      min-request-interval-ms: ${METSAREGISTER_WFS_MIN_REQUEST_INTERVAL_MS:100}
+    auto-refresh:
+      enabled: ${REGISTRY_AUTO_REFRESH_ENABLED:false}
+      fixed-delay-ms: ${REGISTRY_AUTO_REFRESH_DELAY_MS:21600000}
+      batch-size: ${REGISTRY_AUTO_REFRESH_BATCH_SIZE:25}
+      max-batches-per-run: ${REGISTRY_AUTO_REFRESH_MAX_BATCHES_PER_RUN:10}
+      cadastre-max-age-hours: ${REGISTRY_CADASTRE_MAX_AGE_HOURS:168}
+      forest-max-age-hours: ${REGISTRY_FOREST_MAX_AGE_HOURS:24}
+    audit:
+      retention-days: ${REGISTRY_AUDIT_RETENTION_DAYS:30}
+      troubleshooting-payload-retention-hours: ${REGISTRY_AUDIT_TROUBLESHOOTING_RETENTION_HOURS:24}
+      max-stored-payload-bytes: ${REGISTRY_AUDIT_MAX_STORED_PAYLOAD_BYTES:65536}
+      max-diagnostic-sample-bytes: ${REGISTRY_AUDIT_MAX_DIAGNOSTIC_SAMPLE_BYTES:8192}
+      troubleshooting-full-payload-enabled: ${REGISTRY_AUDIT_FULL_PAYLOAD_ENABLED:false}
+      cleanup-fixed-delay-ms: ${REGISTRY_AUDIT_CLEANUP_DELAY_MS:21600000}
+    rik:
+      soap-wsdl-url: ${RIK_KINNISTUSRAAMAT_WSDL:https://kinnistusraamat.rik.ee/krteenused/kr_teenus.asmx?WSDL}
+      username: ${RIK_KINNISTUSRAAMAT_USERNAME:}
+      password: ${RIK_KINNISTUSRAAMAT_PASSWORD:}
+sentry:
+  dsn: ${SENTRY_DSN:}
+  send-default-pii: false
+
+info:
+  forestiq:
+    releaseId: ${FORESTIQ_RELEASE_ID:dev}
+    commitSha: ${FORESTIQ_COMMIT_SHA:unknown}

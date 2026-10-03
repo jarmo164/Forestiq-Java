@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "layers": {
+    "natura_elupaik_attributes": {
+      "type_name": "eelis:natura_elupaik",
+      "sort_field": "sys_id",
+      "format": "csv",
+      "page_size": 100000,
+      "storage_target": "files_only",
+      "geometry": "excluded",
+      "production_import_enabled": false,
+      "sensitive_data_policy": "attributes_only_no_species_location_display",
+      "properties": [
+        "sys_id",
+        "versioon",
+        "id",
+        "pohityyp",
+        "andmestik",
+        "invent_kpv"
+      ]
+    },
+    "natura_elupaik_geopackage": {
+      "type_name": "eelis:natura_elupaik",
+      "sort_field": "sys_id",
+      "format": "geopkg",
+      "page_size": 25000,
+      "storage_target": "files_only",
+      "geometry": "included_for_spatial_analysis",
+      "production_import_enabled": false,
+      "sensitive_data_policy": "operator_file_analysis_only_no_ui_exposure",
+      "properties": []
+    }
+  }
+}

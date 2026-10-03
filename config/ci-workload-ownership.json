@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "fast": {
+    "workflow": ".github/workflows/ci.yml",
+    "jobs": [
+      "backend",
+      "frontend",
+      "ingest-unit",
+      "ingestion-contract",
+      "render-contract",
+      "security-lite",
+      "security-full",
+      "observability-config",
+      "ci-config"
+    ],
+    "aggregate_gate": "fast-quality-gate",
+    "trusted_runner_labels": [
+      "self-hosted",
+      "macOS",
+      "ARM64",
+      "forestiq",
+      "heavy-ci"
+    ],
+    "untrusted_pr_runner": "ubuntu-latest",
+    "untrusted_prs_self_hosted": false
+  },
+  "heavy": {
+    "workflow": ".github/workflows/heavy-verification.yml",
+    "runner_labels": [
+      "self-hosted",
+      "macOS",
+      "ARM64",
+      "forestiq",
+      "heavy-ci"
+    ],
+    "jobs": [
+      "backend-integration",
+      "ingest-integration",
+      "metsaregister-integration",
+      "api-contract",
+      "e2e"
+    ],
+    "aggregate_gate": "heavy-quality-gate",
+    "untrusted_prs_allowed": false,
+    "run_on_main_push": true
+  }
+}

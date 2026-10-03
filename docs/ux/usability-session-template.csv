@@ -1,0 +1,2 @@
+session,role,scenario,variant,success,seconds,help,errors,recovery,confidence,observation
+S01,CALLER,A,current,completed,0,none,0,self,3,

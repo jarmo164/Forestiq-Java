@@ -1,0 +1,1 @@
+{"name":"forestiq.map.tile.latency","description":"Protected vector tile generation latency","baseUnit":"seconds","measurements":[{"statistic":"COUNT","value":243.0},{"statistic":"TOTAL_TIME","value":228.134820478},{"statistic":"MAX","value":4.042007408}],"availableTags":[{"tag":"zoom","values":["8","12"]},{"tag":"layer","values":["land_parcel","land_parcel_overview"]}]}

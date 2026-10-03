@@ -1,0 +1,41 @@
+Pager usage is off.
+Timing is on.
+                                                                QUERY PLAN                                                                 
+-------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=61478.28..61484.23 rows=51 width=38) (actual time=207.229..211.261 rows=51 loops=1)
+   Buffers: shared hit=5337 read=45310
+   ->  Gather Merge  (cost=61478.28..114868.68 rows=457600 width=38) (actual time=207.227..211.254 rows=51 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=5337 read=45310
+         ->  Sort  (cost=60478.26..61050.26 rows=228800 width=38) (actual time=204.044..204.046 rows=41 loops=3)
+               Sort Key: updated_at DESC, id
+               Sort Method: top-N heapsort  Memory: 30kB
+               Buffers: shared hit=5337 read=45310
+               Worker 0:  Sort Method: top-N heapsort  Memory: 31kB
+               Worker 1:  Sort Method: top-N heapsort  Memory: 30kB
+               ->  Parallel Seq Scan on owner  (cost=0.00..52845.00 rows=228800 width=38) (actual time=0.028..162.596 rows=183040 loops=3)
+                     Buffers: shared hit=5247 read=45310
+ Settings: search_path = '"$user", public, topology, tiger'
+ Planning:
+   Buffers: shared hit=283 read=19
+ Planning Time: 5.906 ms
+ Execution Time: 211.340 ms
+(19 rows)
+
+Time: 223.865 ms
+                                                                       QUERY PLAN                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..48665.32 rows=1 width=36) (actual time=1.192..1.193 rows=1 loops=1)
+   Buffers: shared read=4
+   ->  Index Scan using parcel_organization_code_unique on land_parcel  (cost=0.42..48665.32 rows=1 width=36) (actual time=1.190..1.190 rows=1 loops=1)
+         Index Cond: ((cadastral_code)::text = '10501:001:0001'::text)
+         Buffers: shared read=4
+ Settings: search_path = '"$user", public, topology, tiger'
+ Planning:
+   Buffers: shared hit=237 read=14
+ Planning Time: 1.445 ms
+ Execution Time: 1.212 ms
+(10 rows)
+
+Time: 3.999 ms

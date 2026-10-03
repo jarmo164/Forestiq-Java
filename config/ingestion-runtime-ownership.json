@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "api_runtime": {
+    "render_service": "forestiq-api",
+    "compose_service": "api",
+    "forbidden_provider_env": [
+      "METSIS_PORTFOLIO_URI",
+      "METSIS_PORTFOLIO_AUTHORIZATION",
+      "METSIS_PORTFOLIO_ORGANIZATION_ID",
+      "WEASEL_API_BASE_URL",
+      "WEASEL_API_ACCESS_TOKEN",
+      "WEASEL_ORGANIZATION_ID",
+      "INHERITANCE_SOURCE_BASE_URL",
+      "INHERITANCE_SOURCE_API_TOKEN",
+      "INHERITANCE_SOURCE_URI_TEMPLATE",
+      "METSAREGISTER_WFS_BASE_URL",
+      "METSAREGISTER_WFS_TYPE_NAME",
+      "CADASTRE_SNAPSHOT_PATH"
+    ],
+    "forbidden_image_markers": [
+      "gdal-bin",
+      "libgdal",
+      "ogr2ogr"
+    ]
+  },
+  "scheduler_runtime": {
+    "render_service": "forestiq-ingest-scheduler",
+    "compose_service": "ingest-scheduler",
+    "provider_credentials_allowed": false
+  },
+  "worker_runtime": {
+    "render_service": "forestiq-ingest-worker",
+    "compose_service": "ingest-worker",
+    "provider_credentials_allowed": true
+  },
+  "python_etl_families": [
+    "Metsaregister WFS mirror",
+    "Cadastre / geospatial snapshots",
+    "Owner / MetsIS portfolio snapshot",
+    "Weasel ownership",
+    "Inheritance notices"
+  ],
+  "java_realtime_exceptions": [
+    {
+      "name": "RIK object count SOAP call",
+      "classification": "REAL_TIME_DOMAIN_OPERATION"
+    }
+  ]
+}

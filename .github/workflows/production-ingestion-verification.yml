@@ -1,0 +1,102 @@
+name: Production Ingestion Verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_keys:
+        description: Comma-separated migrated integration job keys
+        required: true
+        default: "CADASTRE_PUBLIC_DATA,FOREST_NOTIFICATIONS,FOREST_PLAN,METSAREGISTER_WFS_MIRROR,OWNER_CADASTRE_RELATIONS,WEASEL_OWNERSHIP_TRANSITIONS,INHERITANCE_NOTICES"
+      minimum_scheduled_runs:
+        description: Consecutive successful scheduled runs required per source
+        required: true
+        default: "2"
+      recent_limit:
+        description: Recent runs inspected per source
+        required: true
+        default: "20"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-ingestion-verification
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Read-only production evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FORESTIQ_PRODUCTION_API_URL: ${{ secrets.FORESTIQ_PRODUCTION_API_URL }}
+      FORESTIQ_PRODUCTION_BEARER_TOKEN: ${{ secrets.FORESTIQ_PRODUCTION_BEARER_TOKEN }}
+      FORESTIQ_INGESTION_SOURCE_KEYS: ${{ inputs.source_keys }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+
+      - name: Run secret-free contract tests
+        run: |
+          python -m unittest \
+            scripts/test_ingestion_deployment_contract.py \
+            scripts/test_verify_production_ingestion.py
+
+      - name: Validate inputs and secret presence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${{ inputs.minimum_scheduled_runs }}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${{ inputs.recent_limit }}" =~ ^[1-9][0-9]*$ ]]
+          test -n "$FORESTIQ_INGESTION_SOURCE_KEYS"
+          test -n "$FORESTIQ_PRODUCTION_API_URL"
+          test -n "$FORESTIQ_PRODUCTION_BEARER_TOKEN"
+
+      - name: Verify scheduled ingestion
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/production-ingestion
+          python scripts/verify-production-ingestion.py \
+            --minimum-scheduled-runs "${{ inputs.minimum_scheduled_runs }}" \
+            --recent-limit "${{ inputs.recent_limit }}" \
+            | tee artifacts/production-ingestion/result.txt
+
+      - name: Record non-secret release identity
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          {
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_attempt=${{ github.run_attempt }}"
+            echo "repository_commit=${{ github.sha }}"
+            echo "verified_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > artifacts/production-ingestion/release.txt
+
+      - name: Publish workflow summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          {
+            echo "## Production ingestion verification"
+            echo
+            if test -f artifacts/production-ingestion/result.txt; then
+              sed 's/^/- /' artifacts/production-ingestion/result.txt
+            else
+              echo "- Verification did not produce a PASS result."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload acceptance evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-ingestion-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/production-ingestion/
+          if-no-files-found: error
+          retention-days: 90

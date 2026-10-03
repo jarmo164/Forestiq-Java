@@ -1,0 +1,10 @@
+captured=2026-08-29T12:59:20+03:00
+label=after
+branch=main
+commit=8819b7bcf9fcce8cb8baf0529764126495c5022a
+dirty=1
+uname=MINGW64_NT-10.0-26200 Data 3.6.5-22c95533.x86_64 2025-10-10 12:02 UTC x86_64 Msys
+docker=29.7.2
+compose=5.4.0
+
+

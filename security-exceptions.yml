@@ -1,0 +1,14 @@
+# Time-boxed security exceptions for ForestIQ.
+#
+# Every entry must include:
+# - id: scanner finding identifier, for example GHSA/CVE/rule id
+# - component: affected package, image, file or workflow
+# - severity: high or critical
+# - reason: why the exception is accepted temporarily
+# - owner: accountable person or team
+# - issue: GitHub issue tracking removal
+# - expires_on: ISO date, maximum 90 days from creation
+#
+# Empty by default: new high/critical findings should fail unless documented here
+# and implemented in the scanner-specific ignore mechanism with the same issue.
+exceptions: []

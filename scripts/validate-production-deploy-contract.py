@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+from pathlib import Path
+ROOT=Path(__file__).resolve().parents[1]
+def require(text,needle,message):
+    if needle not in text: raise SystemExit(f"production deploy contract failed: {message}")
+def main()->int:
+    render=(ROOT/"render.yaml").read_text(encoding="utf-8")
+    workflow=(ROOT/".github"/"workflows"/"production-deploy.yml").read_text(encoding="utf-8")
+    if "autoDeployTrigger: commit" in render: raise SystemExit("production deploy contract failed: commit auto-deploy remains enabled")
+    if render.count("autoDeployTrigger: off")<5: raise SystemExit("production deploy contract failed: all five production services must disable auto-deploy")
+    require(workflow,"workflow_dispatch:","production deploy must be explicit")
+    require(workflow,"group: production-deploy","production deploy concurrency is missing")
+    require(workflow,"environment: production","production environment protection is missing")
+    require(workflow,"git merge-base --is-ancestor","requested SHA must be verified on main")
+    require(workflow,'--commit "$RELEASE_SHA"',"CI must be checked for the exact SHA")
+    require(workflow,"ci.yml heavy-verification.yml ingestion-contract.yml","canonical workflow set is incomplete")
+    require(workflow,"docker/build-push-action@","release images must be built in the deploy workflow")
+    require(workflow,"push: true","release image must be pushed before promotion")
+    require(workflow,"platforms: linux/amd64","Render release images must target linux/amd64")
+    require(workflow,"actions/attest@","release images require attestations")
+    require(workflow,"cosign sign --yes","release images require keyless signing")
+    require(workflow,"render_image_promotion.py","Render promotion must use immutable image records")
+    require(workflow,"RENDER_IMAGE_SERVICE_MAP_JSON","Render service/image mapping is missing")
+    require(workflow,"verifyProductionRuntimeHeartbeats","scheduler/worker heartbeat verification is missing")
+    require(workflow,"production_smoke.py","production smoke verification is missing")
+    require(workflow,"render_rollback","automatic rollback path is missing")
+    require(workflow,"steps.promote.outcome == 'success'","rollback must only target a completed promotion")
+    require(workflow,'release_id: ${{ steps.release.outputs.release_id }}',"versioned release ID output is missing")
+    require(workflow,"FORESTIQ_RELEASE_ID=","release ID must be embedded in built images")
+    require(workflow,"FORESTIQ_COMMIT_SHA=","commit SHA must be embedded in built images")
+    require(workflow,"assemble_release_manifest.py","final release manifest assembly is missing")
+    require(workflow,"release-manifest-","final release manifest artifact is missing")
+    require(workflow,"gh release create","successful deployment must publish a GitHub release/tag")
+    require(workflow,"--generate-notes","release notes generation is missing")
+    if "commitId" in workflow: raise SystemExit("production deploy contract failed: source-build commit deployment is forbidden")
+    if ":latest" in workflow: raise SystemExit("production deploy contract failed: latest tag is forbidden")
+    print("Controlled immutable production deploy contract is valid."); return 0
+if __name__=="__main__": raise SystemExit(main())

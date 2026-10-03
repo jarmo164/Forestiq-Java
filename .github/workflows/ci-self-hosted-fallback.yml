@@ -1,0 +1,55 @@
+name: CI / Self-hosted fallback
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: Verification scope to run on the ForestIQ Mac Studio
+        required: true
+        type: choice
+        default: fast
+        options:
+          - fast
+          - full
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-self-hosted-fallback-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: self-hosted-fallback-quality-gate
+    runs-on: [self-hosted, macOS, ARM64, forestiq, heavy-ci]
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Verify toolchain
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          java -version
+          node --version
+          pnpm --version
+          python3 --version
+          docker info
+          docker compose version
+
+      - name: Run fast verification
+        if: ${{ inputs.scope == 'fast' }}
+        shell: bash
+        run: make test-fast
+
+      - name: Run full verification
+        if: ${{ inputs.scope == 'full' }}
+        shell: bash
+        run: make check-all
+
+      - name: Clean persistent runner workspace
+        if: ${{ always() }}
+        shell: bash
+        run: bash scripts/ci/cleanup-self-hosted.sh

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "runner_labels": [
+    "self-hosted",
+    "macOS",
+    "ARM64",
+    "forestiq",
+    "heavy-ci"
+  ],
+  "allowed_heavy_workflows": [
+    "heavy-verification.yml",
+    "e2e-compose.yml",
+    "ci-self-hosted-fallback.yml",
+    "self-hosted-runner-diagnostics.yml",
+    "self-hosted-runner-acceptance.yml"
+  ],
+  "forbid_pull_request_target": true,
+  "forbid_repository_secrets_on_self_hosted_tests": true,
+  "require_read_only_contents": true,
+  "require_fork_trust_gate_in": "heavy-verification.yml",
+  "require_non_admin_acceptance": true,
+  "forbidden_environment_names": [
+    "DATABASE_PASSWORD",
+    "FLYWAY_DATABASE_PASSWORD",
+    "INHERITANCE_SOURCE_API_TOKEN",
+    "KEYCLOAK_ADMIN_CLIENT_SECRET",
+    "METSIS_PORTFOLIO_AUTHORIZATION",
+    "RIK_API_PASSWORD",
+    "S3_SECRET_KEY",
+    "WEASEL_API_ACCESS_TOKEN"
+  ]
+}

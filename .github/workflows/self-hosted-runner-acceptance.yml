@@ -1,0 +1,40 @@
+name: Self-hosted runner acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-hosted-runner-acceptance
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    name: Mac Studio runner acceptance
+    runs-on: [self-hosted, macOS, ARM64, forestiq, heavy-ci]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Run acceptance checks
+        shell: bash
+        env:
+          RUNNER_ACCEPTANCE_REPORT: artifacts/runner/acceptance.md
+          RUNNER_ACCEPTANCE_JSON: artifacts/runner/acceptance.json
+          EXPECTED_RUNNER_NAME: koodikratt
+          RUNNER_INSTALL_DIR: /Users/koodikratt/actions-runner
+        run: bash scripts/ci/runner-acceptance.sh
+
+      - name: Upload acceptance evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: self-hosted-runner-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/runner/acceptance.md
+            artifacts/runner/acceptance.json
+          if-no-files-found: warn
+          retention-days: 30

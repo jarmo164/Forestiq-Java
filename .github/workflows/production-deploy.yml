@@ -1,0 +1,487 @@
+name: Production deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Exact main commit SHA to build and deploy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify release gate
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      release_id: ${{ steps.release.outputs.release_id }}
+      performance_profile: ${{ steps.release.outputs.performance_profile }}
+      heavy_run_id: ${{ steps.canonical.outputs.heavy_run_id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Verify commit is on main
+        id: release
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.commit_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          git fetch origin main
+          sha="$(git rev-parse "${REQUESTED_SHA}^{commit}")"
+          git merge-base --is-ancestor "$sha" origin/main || {
+            echo "Requested SHA is not reachable from origin/main" >&2
+            exit 1
+          }
+          release_id="forestiq-${GITHUB_RUN_NUMBER}-${sha:0:12}"
+          git checkout --detach "$sha"
+
+          # Classify the complete unreleased delta, not just the last commit.
+          base="$(gh release view --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish' 2>/dev/null || true)"
+          if [[ ! "$base" =~ ^[0-9a-f]{40}$ ]] || ! git merge-base --is-ancestor "$base" "$sha" 2>/dev/null; then
+            base="$(git rev-parse "$sha^" 2>/dev/null || true)"
+          fi
+          if [[ "$base" =~ ^[0-9a-f]{40}$ ]]; then
+            bash scripts/ci/classify-changes.sh "pull_request" "$base" "$sha"
+          else
+            bash scripts/ci/classify-changes.sh "workflow_dispatch" "" "$sha"
+          fi
+
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          echo "release_id=$release_id"
+      - name: Require canonical CI for exact SHA
+        id: canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -Eeuo pipefail
+          for workflow in ci.yml heavy-verification.yml ingestion-contract.yml; do
+            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --commit "$RELEASE_SHA" --workflow "$workflow" --limit 30 \
+              --json databaseId,status,conclusion,headSha,event,headBranch \
+              --jq '[.[] | select(.headSha == env.RELEASE_SHA and .event == "push" and .headBranch == "main" and .status == "completed" and .conclusion == "success")] | first | .databaseId // empty')"
+            if [[ -z "$run_id" ]]; then
+              echo "No successful canonical push run for $workflow at $RELEASE_SHA" >&2
+              exit 1
+            fi
+            if [[ "$workflow" == "heavy-verification.yml" ]]; then
+              echo "heavy_run_id=$run_id" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+  migration-preflight:
+    name: Migration preflight / fresh + N-1
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+      - name: Set up Java 21
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - name: Enforce expand/migrate/contract policy
+        run: python scripts/release/validate_migration_policy.py
+      - name: Test fresh and N-1 to N migration paths
+        working-directory: backend
+        run: ./gradlew --no-daemon integrationTest --tests 'ee.forestiq.migration.MigrationUpgradePathIntegrationTest'
+
+  build-images:
+    name: Build, scan and attest / ${{ matrix.image }}
+    needs:
+      - verify
+      - migration-preflight
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            repository: forestiq-api
+            context: backend
+            dockerfile: backend/Dockerfile
+          - image: web
+            repository: forestiq-web
+            context: frontend
+            dockerfile: frontend/Dockerfile
+          - image: ingest
+            repository: forestiq-ingest
+            context: ingest
+            dockerfile: ingest/Dockerfile
+    steps:
+      - name: Checkout exact release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build and push exact release image
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}:${{ needs.verify.outputs.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}:${{ needs.verify.outputs.release_id }}
+          build-args: |
+            FORESTIQ_RELEASE_ID=${{ needs.verify.outputs.release_id }}
+            FORESTIQ_COMMIT_SHA=${{ needs.verify.outputs.sha }}
+          provenance: mode=max
+          sbom: true
+          labels: |
+            org.opencontainers.image.revision=${{ needs.verify.outputs.sha }}
+            org.opencontainers.image.version=${{ needs.verify.outputs.release_id }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+      - name: Prepare evidence directory
+        run: mkdir -p artifacts
+      - name: Generate SPDX SBOM for pushed digest
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: artifacts/${{ matrix.image }}.spdx.json
+      - name: Scan exact pushed digest
+        uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5 # v0.30.0
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}@${{ steps.build.outputs.digest }}
+          format: json
+          output: artifacts/${{ matrix.image }}-trivy.json
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Attest SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: artifacts/${{ matrix.image }}.spdx.json
+          push-to-registry: true
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Keyless-sign exact image digest
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "$IMAGE@$DIGEST"
+      - name: Write immutable image record
+        env:
+          IMAGE_KEY: ${{ matrix.image }}
+          REPOSITORY: ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          RELEASE_SHA: ${{ needs.verify.outputs.sha }}
+        run: |
+          mkdir -p artifacts
+          python scripts/release/write_image_record.py \
+            --image "$IMAGE_KEY" \
+            --repository "$REPOSITORY" \
+            --digest "$DIGEST" \
+            --commit "$RELEASE_SHA" \
+            --output "artifacts/${IMAGE_KEY}.json"
+      - name: Upload supply-chain evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-image-${{ matrix.image }}-${{ needs.verify.outputs.sha }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 90
+
+  assemble:
+    name: Assemble immutable image manifest
+    needs:
+      - verify
+      - build-images
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.manifest.outputs.release_id }}
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+      - name: Download image evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-image-*-${{ needs.verify.outputs.sha }}
+          path: artifacts/images
+          merge-multiple: true
+      - name: Assemble release image manifest
+        id: manifest
+        env:
+          RELEASE_SHA: ${{ needs.verify.outputs.sha }}
+        run: |
+          python scripts/release/assemble_image_manifest.py \
+            --commit "$RELEASE_SHA" \
+            --release-id "${{ needs.verify.outputs.release_id }}" \
+            --input artifacts/images \
+            --output artifacts/release-images.json
+          echo "release_id=${{ needs.verify.outputs.release_id }}" >> "$GITHUB_OUTPUT"
+      - name: Upload immutable image manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-images-${{ needs.verify.outputs.sha }}
+          path: artifacts/release-images.json
+          if-no-files-found: error
+          retention-days: 90
+
+  deploy:
+    name: Promote exact image digests to Render
+    needs:
+      - verify
+      - assemble
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+      - name: Download immutable image manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-images-${{ needs.verify.outputs.sha }}
+          path: artifacts
+      - name: Set up Java 21 for production migration
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - name: Apply and validate production migration
+        working-directory: backend
+        env:
+          FLYWAY_DATABASE_URL: ${{ secrets.FORESTIQ_PRODUCTION_FLYWAY_URL }}
+          FLYWAY_DATABASE_USERNAME: ${{ secrets.FORESTIQ_PRODUCTION_FLYWAY_USERNAME }}
+          FLYWAY_DATABASE_PASSWORD: ${{ secrets.FORESTIQ_PRODUCTION_FLYWAY_PASSWORD }}
+        run: |
+          mkdir -p ../artifacts
+          ./gradlew --no-daemon migrateDatabase 2>&1 | tee ../artifacts/production-migration.log
+      - name: Verify runtime database role separation
+        working-directory: backend
+        env:
+          FLYWAY_DATABASE_URL: ${{ secrets.FORESTIQ_PRODUCTION_FLYWAY_URL }}
+          FLYWAY_DATABASE_USERNAME: ${{ secrets.FORESTIQ_PRODUCTION_FLYWAY_USERNAME }}
+          FLYWAY_DATABASE_PASSWORD: ${{ secrets.FORESTIQ_PRODUCTION_FLYWAY_PASSWORD }}
+        run: ./gradlew --no-daemon verifyProductionDatabaseRoles
+      - name: Upload migration evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-migration-${{ needs.verify.outputs.sha }}
+          path: artifacts/production-migration.log
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Promote exact digests
+        id: promote
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_IMAGE_SERVICE_MAP_JSON: ${{ secrets.RENDER_IMAGE_SERVICE_MAP_JSON }}
+        run: |
+          python scripts/release/render_image_promotion.py \
+            --manifest artifacts/release-images.json \
+            --service-map-json "$RENDER_IMAGE_SERVICE_MAP_JSON" \
+            --output artifacts/render-deployments.json
+      - name: Verify scheduler and worker heartbeats
+        id: heartbeats
+        working-directory: backend
+        env:
+          FLYWAY_DATABASE_URL: ${{ secrets.FORESTIQ_PRODUCTION_FLYWAY_URL }}
+          FLYWAY_DATABASE_USERNAME: ${{ secrets.FORESTIQ_PRODUCTION_FLYWAY_USERNAME }}
+          FLYWAY_DATABASE_PASSWORD: ${{ secrets.FORESTIQ_PRODUCTION_FLYWAY_PASSWORD }}
+          FORESTIQ_RUNTIME_HEARTBEAT_MAX_AGE_SECONDS: "180"
+        run: ./gradlew --no-daemon verifyProductionRuntimeHeartbeats
+      - name: Run authenticated production smoke suite
+        id: smoke
+        env:
+          WEB_URL: ${{ secrets.FORESTIQ_PRODUCTION_WEB_URL }}
+          API_URL: ${{ secrets.FORESTIQ_PRODUCTION_API_URL }}
+          KEYCLOAK_URL: ${{ secrets.FORESTIQ_PRODUCTION_KEYCLOAK_URL }}
+          BEARER_TOKEN: ${{ secrets.FORESTIQ_PRODUCTION_BEARER_TOKEN }}
+        run: |
+          python scripts/release/production_smoke.py \
+            --web-url "$WEB_URL" \
+            --api-url "$API_URL" \
+            --keycloak-url "$KEYCLOAK_URL" \
+            --realm forestiq \
+            --token "$BEARER_TOKEN" \
+            --release-id "${{ needs.verify.outputs.release_id }}" \
+            --commit "${{ needs.verify.outputs.sha }}" \
+            --output artifacts/production-smoke.json
+      - name: Roll back services after failed post-deploy verification
+        id: rollback
+        if: ${{ failure() && steps.promote.outcome == 'success' }}
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          python -m scripts.release.render_rollback \
+            --deployments artifacts/render-deployments.json \
+            --output artifacts/render-rollback.json
+      - name: Verify rollback HTTP/auth surfaces
+        if: ${{ failure() && steps.rollback.outcome == 'success' }}
+        env:
+          WEB_URL: ${{ secrets.FORESTIQ_PRODUCTION_WEB_URL }}
+          API_URL: ${{ secrets.FORESTIQ_PRODUCTION_API_URL }}
+          KEYCLOAK_URL: ${{ secrets.FORESTIQ_PRODUCTION_KEYCLOAK_URL }}
+          BEARER_TOKEN: ${{ secrets.FORESTIQ_PRODUCTION_BEARER_TOKEN }}
+        run: |
+          python scripts/release/production_smoke.py \
+            --web-url "$WEB_URL" \
+            --api-url "$API_URL" \
+            --keycloak-url "$KEYCLOAK_URL" \
+            --realm forestiq \
+            --token "$BEARER_TOKEN" \
+            --output artifacts/rollback-smoke.json
+      - name: Download exact-SHA performance evidence
+        if: ${{ success() && needs.verify.outputs.performance_profile == 'performance' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAVY_RUN_ID: ${{ needs.verify.outputs.heavy_run_id }}
+          RELEASE_SHA: ${{ needs.verify.outputs.sha }}
+        run: |
+          set -Eeuo pipefail
+          rm -rf artifacts/performance-download
+          mkdir -p artifacts/performance-download
+          gh run download "$HEAVY_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "performance-evidence-$RELEASE_SHA" \
+            --dir artifacts/performance-download
+          evidence="$(find artifacts/performance-download -type f -name performance-evidence.json -print -quit)"
+          [[ -n "$evidence" ]] || { echo "Performance evidence artifact is missing" >&2; exit 1; }
+          cp "$evidence" artifacts/performance-evidence.json
+
+      - name: Assemble final release manifest
+        if: ${{ success() }}
+        env:
+          RELEASE_ID: ${{ needs.verify.outputs.release_id }}
+          RELEASE_SHA: ${{ needs.verify.outputs.sha }}
+          WORKFLOW_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          args=(
+            --release-id "$RELEASE_ID"
+            --commit "$RELEASE_SHA"
+            --images artifacts/release-images.json
+            --deployments artifacts/render-deployments.json
+            --smoke artifacts/production-smoke.json
+            --migration-log artifacts/production-migration.log
+            --workflow-run-url "$WORKFLOW_RUN_URL"
+            --performance-profile "${{ needs.verify.outputs.performance_profile }}"
+            --output artifacts/release-manifest.json
+          )
+          if [[ "${{ needs.verify.outputs.performance_profile }}" == "performance" ]]; then
+            args+=(--performance-evidence artifacts/performance-evidence.json)
+          fi
+          python scripts/release/assemble_release_manifest.py "${args[@]}"
+      - name: Upload final release manifest
+        if: ${{ success() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-manifest-${{ needs.verify.outputs.release_id }}
+          path: artifacts/release-manifest.json
+          if-no-files-found: error
+          retention-days: 365
+      - name: Upload production verification and rollback evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-verification-${{ needs.verify.outputs.sha }}
+          path: |
+            artifacts/production-smoke.json
+            artifacts/rollback-smoke.json
+            artifacts/render-rollback.json
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Upload Render deployment evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: render-deployments-${{ needs.verify.outputs.sha }}
+          path: artifacts/render-deployments.json
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Write deployment summary
+        env:
+          RELEASE_SHA: ${{ needs.verify.outputs.sha }}
+          RELEASE_ID: ${{ needs.verify.outputs.release_id }}
+        run: |
+          {
+            echo "## ForestIQ production deployment"
+            echo "- Release: `$RELEASE_ID`"
+            echo "- Commit: `$RELEASE_SHA`"
+            echo "- Artifact model: GHCR immutable digests"
+            echo "- Environment: production"
+            echo "- Triggered by: `${GITHUB_ACTOR}`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
+  publish-release:
+    name: Publish versioned GitHub release
+    needs:
+      - verify
+      - deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download final release manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-manifest-${{ needs.verify.outputs.release_id }}
+          path: artifacts
+      - name: Create release tag and generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.verify.outputs.release_id }}
+          RELEASE_SHA: ${{ needs.verify.outputs.sha }}
+        run: |
+          set -Eeuo pipefail
+          gh release create "$RELEASE_ID" \
+            artifacts/release-manifest.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$RELEASE_SHA" \
+            --title "ForestIQ $RELEASE_ID" \
+            --generate-notes
+      - name: Write release summary
+        env:
+          RELEASE_ID: ${{ needs.verify.outputs.release_id }}
+        run: |
+          echo "- GitHub release: `$RELEASE_ID`" >> "$GITHUB_STEP_SUMMARY"

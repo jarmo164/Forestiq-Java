@@ -1,0 +1,247 @@
+name: Metsaregister WFS Probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Probe live Metsaregister WFS catalogue and schemas
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+          import urllib.parse
+          import urllib.request
+          import xml.etree.ElementTree as ET
+
+          BASE = "https://gsavalik.envir.ee/geoserver/metsaregister/ows"
+          CANDIDATES = ["sys_id", "id", "objectid", "gid", "ogc_fid"]
+          TIMEOUT = 30
+
+          def get_bytes(params):
+              url = BASE + "?" + urllib.parse.urlencode(params)
+              req = urllib.request.Request(url, headers={"User-Agent": "ForestIQ-WFS-Probe/1.0"})
+              with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+                  return response.read(), response.headers.get_content_type(), url
+
+          def local(tag):
+              return tag.rsplit("}", 1)[-1]
+
+          capabilities, _, _ = get_bytes({
+              "service": "WFS",
+              "version": "2.0.0",
+              "request": "GetCapabilities",
+          })
+          root = ET.fromstring(capabilities)
+          layers = []
+          for feature_type in root.iter():
+              if local(feature_type.tag) != "FeatureType":
+                  continue
+              name = None
+              title = None
+              for child in feature_type:
+                  if local(child.tag) == "Name":
+                      name = (child.text or "").strip()
+                  elif local(child.tag) == "Title":
+                      title = (child.text or "").strip()
+              if name and name.startswith("metsaregister:"):
+                  layers.append((name, title))
+
+          layers = sorted(dict(layers).items())
+          print(f"Discovered {len(layers)} Metsaregister layers")
+          results = []
+
+          for index, (layer, title) in enumerate(layers, 1):
+              row = {"layer": layer, "title": title}
+              try:
+                  schema_bytes, _, schema_url = get_bytes({
+                      "service": "WFS",
+                      "version": "2.0.0",
+                      "request": "DescribeFeatureType",
+                      "typeNames": layer,
+                  })
+                  schema_root = ET.fromstring(schema_bytes)
+                  fields = []
+                  for elem in schema_root.iter():
+                      if local(elem.tag) != "element":
+                          continue
+                      name = elem.attrib.get("name")
+                      typ = elem.attrib.get("type")
+                      if name:
+                          fields.append({"name": name, "type": typ})
+                  property_names = [f["name"] for f in fields]
+                  lower = {name.lower(): name for name in property_names}
+                  identity = next((lower[c] for c in CANDIDATES if c in lower), None)
+                  row.update({
+                      "describeFeatureTypeUrl": schema_url,
+                      "fields": fields,
+                      "identityCandidate": identity,
+                  })
+
+                  feature_bytes, content_type, feature_url = get_bytes({
+                      "service": "WFS",
+                      "version": "2.0.0",
+                      "request": "GetFeature",
+                      "typeNames": layer,
+                      "count": "1",
+                      "outputFormat": "application/json",
+                  })
+                  row["sampleUrl"] = feature_url
+                  row["sampleContentType"] = content_type
+                  try:
+                      payload = json.loads(feature_bytes.decode("utf-8"))
+                      features = payload.get("features") or []
+                      props = (features[0].get("properties") or {}) if features else {}
+                      row["samplePropertyNames"] = sorted(props.keys())
+                      row["sampleFeatureId"] = features[0].get("id") if features else None
+                      row["numberMatched"] = payload.get("numberMatched")
+                  except Exception as exc:
+                      row["sampleParseError"] = str(exc)
+              except Exception as exc:
+                  row["error"] = f"{type(exc).__name__}: {exc}"
+
+              results.append(row)
+              print(json.dumps({
+                  "index": index,
+                  "layer": layer,
+                  "identityCandidate": row.get("identityCandidate"),
+                  "sampleFeatureId": row.get("sampleFeatureId"),
+                  "error": row.get("error"),
+              }, ensure_ascii=False))
+
+          with open("metsaregister-wfs-probe.json", "w", encoding="utf-8") as handle:
+              json.dump({"layerCount": len(layers), "layers": results}, handle, ensure_ascii=False, indent=2)
+
+          failures = [r for r in results if r.get("error")]
+          unsupported = [r["layer"] for r in results if not r.get("identityCandidate") and not r.get("error")]
+          print(f"Probe complete: failures={len(failures)}, noGenericIdentity={len(unsupported)}")
+          if unsupported:
+              print("Layers without generic identity candidate:")
+              for layer in unsupported:
+                  print(" -", layer)
+          if failures:
+              print("Provider probe diagnostics:", file=sys.stderr)
+              for failure in failures:
+                  print(" -", failure["layer"], failure["error"], file=sys.stderr)
+              print("Provider failures are recorded as diagnostics and do not block the independent CSV smoke.")
+          PY
+
+      - name: Upload probe result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: metsaregister-wfs-probe
+          path: metsaregister-wfs-probe.json
+          if-no-files-found: warn
+
+  csv-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+
+      - name: Install CSV exporter dependencies
+        run: python -m pip install -r scripts/metsaregister/requirements.txt
+
+      - name: Diagnose anonymous access for every approved layer
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          base = "https://gsavalik.envir.ee/geoserver/metsaregister/ows"
+          catalogue = json.loads(Path("scripts/metsaregister/layers.json").read_text(encoding="utf-8"))
+          layers = [layer for layer in catalogue["layers"] if layer.get("approved") and layer.get("enabled")]
+          results = []
+          for layer in layers:
+              name = layer["name"]
+              params = {
+                  "service": "WFS",
+                  "version": "2.0.0",
+                  "request": "GetFeature",
+                  "typeNames": name,
+                  "resultType": "hits",
+              }
+              url = base + "?" + urllib.parse.urlencode(params)
+              error = None
+              for attempt in range(1, 4):
+                  try:
+                      request = urllib.request.Request(url, headers={"User-Agent": "ForestIQ-CSV-Smoke/1.0"})
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          response.read(4096)
+                      error = None
+                      print(f"OK {name} attempt={attempt}")
+                      break
+                  except Exception as exc:
+                      error = f"{type(exc).__name__}: {exc}"
+                      print(f"WARN {name} attempt={attempt}: {error}")
+                      if attempt < 3:
+                          time.sleep(attempt * 2)
+              results.append({"layer": name, "ok": error is None, "error": error})
+
+          Path("metsaregister-csv-access.json").write_text(
+              json.dumps({"approvedLayerCount": len(layers), "layers": results}, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+          failures = [result for result in results if not result["ok"]]
+          print(f"Anonymous WFS access diagnostics: ok={len(results)-len(failures)}/{len(results)}, failures={len(failures)}")
+          for failure in failures:
+              print(f"PROVIDER-DEGRADED {failure['layer']}: {failure['error']}")
+          PY
+
+      - name: Export and validate small live layer
+        shell: bash
+        run: |
+          rm -rf /tmp/forestiq-metsaregister-smoke
+          python scripts/metsaregister/export_wfs_csv.py \
+            --layer metsaregister:kl_rinne \
+            --output-dir /tmp/forestiq-metsaregister-smoke \
+            --page-size 100 \
+            --overwrite
+          python scripts/metsaregister/import_csv_postgis.py \
+            /tmp/forestiq-metsaregister-smoke \
+            --dry-run
+          python - <<'PY'
+          import csv
+          import json
+          from pathlib import Path
+
+          root = Path("/tmp/forestiq-metsaregister-smoke")
+          csv_path = root / "metsaregister__kl_rinne.csv"
+          manifest_path = root / "metsaregister__kl_rinne.manifest.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          with csv_path.open(encoding="utf-8", newline="") as handle:
+              rows = list(csv.DictReader(handle))
+          assert manifest["status"] == "complete"
+          assert len(rows) == manifest["rows_exported"]
+          if manifest.get("provider_number_matched") is not None:
+              assert len(rows) == manifest["provider_number_matched"]
+          assert rows, "kl_rinne live smoke returned no rows"
+          print(f"Live CSV smoke complete: {len(rows)} rows")
+          PY
+
+      - name: Upload live CSV smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: metsaregister-csv-smoke
+          path: |
+            metsaregister-csv-access.json
+            /tmp/forestiq-metsaregister-smoke/*.csv
+            /tmp/forestiq-metsaregister-smoke/*.manifest.json
+          if-no-files-found: warn

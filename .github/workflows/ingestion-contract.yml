@@ -1,0 +1,114 @@
+name: Ingestion Contract
+
+on:
+  push:
+    branches:
+      - main
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ingestion-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Deployment and verification contract
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || fromJSON('["self-hosted","macOS","ARM64","forestiq","heavy-ci"]') }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python 3.13 on hosted runner
+        if: ${{ runner.os != 'macOS' }}
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+
+      - name: Select Python runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${RUNNER_OS}" == "macOS" ]]; then
+            python3 - <<'PY'
+          import sys
+          print(sys.version)
+          if sys.version_info < (3, 13):
+              raise SystemExit("ForestIQ trusted CI requires Python >= 3.13")
+          PY
+            echo "PYTHON_BIN=python3" >> "${GITHUB_ENV}"
+          else
+            echo "PYTHON_BIN=python" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Run secret-free contract tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/ingestion-contract
+          "$PYTHON_BIN" -m unittest \
+            scripts/test_ingestion_deployment_contract.py \
+            scripts/test_verify_production_ingestion.py \
+            scripts/test_api_ingest_boundary.py \
+            2>&1 | tee artifacts/ingestion-contract/unittest.log
+          "$PYTHON_BIN" scripts/validate_api_ingest_boundary.py \
+            2>&1 | tee artifacts/ingestion-contract/api-boundary.log
+
+      - name: Validate Compose models
+        shell: bash
+        env:
+          POSTGRES_DB: forestiq_contract
+          POSTGRES_USER: forestiq_contract
+          POSTGRES_PASSWORD: contract-only
+          API_DATABASE_USER: forestiq_api_contract
+          API_DATABASE_PASSWORD: contract-only
+          INGEST_DATABASE_USER: forestiq_ingest_contract
+          INGEST_DATABASE_PASSWORD: contract-only
+          KEYCLOAK_ADMIN: contract-admin
+          KEYCLOAK_ADMIN_PASSWORD: contract-only
+          KEYCLOAK_ADMIN_API_CLIENT_SECRET: contract-only
+          MINIO_ROOT_USER: contract-minio
+          MINIO_ROOT_PASSWORD: contract-only
+          S3_BUCKET: forestiq-contract
+          CORS_ALLOWED_ORIGINS: http://localhost:3000
+          NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8180
+          KEYCLOAK_REALM: forestiq-dev
+          NEXT_PUBLIC_KEYCLOAK_REALM: forestiq-dev
+          NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: forestiq-web
+          DATABASE_URL: postgresql://contract
+          DATABASE_USERNAME: contract
+          DATABASE_PASSWORD: contract-only
+          INGEST_DATABASE_URL: postgresql://contract
+          KEYCLOAK_ISSUER_URI: https://example.invalid/realms/forestiq
+          KEYCLOAK_JWK_SET_URI: https://example.invalid/certs
+          KEYCLOAK_ADMIN_BASE_URL: https://example.invalid
+          KEYCLOAK_ADMIN_REALM: forestiq
+          KEYCLOAK_ADMIN_CLIENT_SECRET: contract-only
+          S3_ENDPOINT: https://example.invalid
+          S3_ACCESS_KEY: contract
+          S3_SECRET_KEY: contract-only
+          FORESTIQ_NOTIFICATIONS_APP_BASE_URL: https://example.invalid
+          FORESTIQ_NOTIFICATIONS_FROM: noreply@example.invalid
+          NEXT_PUBLIC_MAPTILER_KEY: contract-only
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/ingestion-contract
+          docker compose -f compose.yaml config --quiet \
+            2>&1 | tee artifacts/ingestion-contract/compose-config.log
+          docker compose -f compose.prod.yaml config --quiet \
+            2>&1 | tee artifacts/ingestion-contract/compose-prod-config.log
+
+      - name: Upload ingestion contract diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ingestion-contract-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/ingestion-contract/
+          if-no-files-found: warn
+          retention-days: 14
+

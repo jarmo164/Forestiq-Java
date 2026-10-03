@@ -1,0 +1,11 @@
+{
+  "version": "2026-09-07",
+  "sourceLayer": "forestry",
+  "layers": [
+    {"key":"metsaregister:teatis","minZoom":9,"maxZoom":20,"featureBudget":4500,"byteBudget":393216,"coldP95Ms":800,"warmP95Ms":250,"databaseP95Ms":500,"extent":4096,"buffer":64,"lowZoomPolicy":"HIDDEN_BELOW_MIN_ZOOM","queryable":true,"authorizationScope":"AUTHENTICATED","styleKind":"FORESTRY_POLYGON","properties":["featureKey","cadastralCode","notificationKey","providerStatus","archived"]},
+    {"key":"metsaregister:teatis_arhiiv","minZoom":9,"maxZoom":20,"featureBudget":4500,"byteBudget":393216,"coldP95Ms":800,"warmP95Ms":250,"databaseP95Ms":500,"extent":4096,"buffer":64,"lowZoomPolicy":"HIDDEN_BELOW_MIN_ZOOM","queryable":true,"authorizationScope":"AUTHENTICATED","styleKind":"FORESTRY_POLYGON","properties":["featureKey","cadastralCode","notificationKey","providerStatus","archived"]},
+    {"key":"metsaregister:eraldis","minZoom":10,"maxZoom":20,"featureBudget":6000,"byteBudget":524288,"coldP95Ms":900,"warmP95Ms":300,"databaseP95Ms":600,"extent":4096,"buffer":64,"lowZoomPolicy":"HIDDEN_BELOW_MIN_ZOOM","queryable":true,"authorizationScope":"AUTHENTICATED","styleKind":"FORESTRY_POLYGON","properties":["featureKey","cadastralCode","compartmentId"]},
+    {"key":"metsaregister:isearasused","minZoom":10,"maxZoom":20,"featureBudget":3500,"byteBudget":393216,"coldP95Ms":800,"warmP95Ms":250,"databaseP95Ms":500,"extent":4096,"buffer":64,"lowZoomPolicy":"HIDDEN_BELOW_MIN_ZOOM","queryable":true,"authorizationScope":"AUTHENTICATED","styleKind":"FORESTRY_POLYGON","properties":["featureKey","compartmentId","code"]},
+    {"key":"metsaregister:kahjustused","minZoom":10,"maxZoom":20,"featureBudget":3500,"byteBudget":393216,"coldP95Ms":800,"warmP95Ms":250,"databaseP95Ms":500,"extent":4096,"buffer":64,"lowZoomPolicy":"HIDDEN_BELOW_MIN_ZOOM","queryable":true,"authorizationScope":"AUTHENTICATED","styleKind":"FORESTRY_POLYGON","properties":["featureKey","compartmentId","code","cause","severity"]}
+  ]
+}

@@ -1,0 +1,5 @@
+benchmark	ok	total	avg_ms	p50_ms	p95_ms	p99_ms	max_ms
+relations_cursor	200	200	450.44	390.111	764.557	1480.939	1781.978
+parcel_summary	0	200	NA	NA	NA	NA	NA
+tile_cold	120	120	1247.82	861.761	1776.501	10154.414	10521.068
+tile_warm	120	120	413.91	366.467	709.530	958.503	1150.694

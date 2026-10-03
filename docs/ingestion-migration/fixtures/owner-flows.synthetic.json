@@ -1,0 +1,161 @@
+{
+  "fixtureVersion": 1,
+  "sourceFamily": "OWNER_AND_NOTICE_FLOWS",
+  "organizationId": "00000000-0000-0000-0000-000000000001",
+  "ownerPortfolio": {
+    "jobKey": "OWNER_CADASTRE_RELATIONS",
+    "snapshotVersion": "synthetic-owner-v1",
+    "pages": [
+      {
+        "cursor": "page-1",
+        "items": [
+          {
+            "sourceOwnerId": "owner-a",
+            "displayName": "Synthetic A",
+            "cadastres": [
+              "12345:678:0001",
+              "12345:678:0002"
+            ]
+          },
+          {
+            "sourceOwnerId": "owner-b",
+            "displayName": "Synthetic B",
+            "cadastres": [
+              "12345:678:0001"
+            ]
+          }
+        ],
+        "nextCursor": "page-2"
+      },
+      {
+        "cursor": "page-2",
+        "items": [
+          {
+            "sourceOwnerId": "owner-c",
+            "displayName": "Synthetic C",
+            "cadastres": [
+              "12345:678:0003"
+            ]
+          }
+        ],
+        "nextCursor": null
+      }
+    ],
+    "existingManualRelation": {
+      "sourceOwnerId": "owner-manual",
+      "cadastreCode": "12345:678:0002",
+      "provenance": "MANUAL",
+      "active": true
+    },
+    "expected": {
+      "owners": 3,
+      "providerRelations": 4,
+      "multiOwnerCadastre": "12345:678:0001",
+      "multiOwnerCount": 2,
+      "manualRelationPreserved": true,
+      "incompleteFirstPagePublishAllowed": false
+    }
+  },
+  "weasel": {
+    "jobKey": "WEASEL_OWNERSHIP_TRANSITIONS",
+    "watermarkBefore": "2026-09-15T00:00:00Z",
+    "overlapHours": 6,
+    "events": [
+      {
+        "sourceEventId": "evt-1",
+        "occurredAt": "2026-09-15T01:00:00Z",
+        "cadastreCode": "12345:678:0001",
+        "fromOwnerId": "owner-a",
+        "toOwnerId": "owner-b"
+      },
+      {
+        "sourceEventId": "evt-1",
+        "occurredAt": "2026-09-15T01:00:00Z",
+        "cadastreCode": "12345:678:0001",
+        "fromOwnerId": "owner-a",
+        "toOwnerId": "owner-b"
+      },
+      {
+        "sourceEventId": "evt-2",
+        "occurredAt": "2026-09-15T02:00:00Z",
+        "cadastreCode": "12345:678:0002",
+        "fromOwnerId": "owner-a",
+        "toOwnerId": "owner-c"
+      }
+    ],
+    "expected": {
+      "uniqueEvents": 2,
+      "duplicatesIgnored": 1,
+      "watermarkAfterSuccess": "2026-09-15T02:00:00Z",
+      "watermarkAfterFailure": "2026-09-15T00:00:00Z"
+    }
+  },
+  "inheritance": {
+    "jobKey": "INHERITANCE_NOTICES",
+    "lastCompletedDateBefore": "2026-09-14",
+    "notices": [
+      {
+        "sourceNoticeId": "notice-1",
+        "publishedDate": "2026-09-15",
+        "subjectToken": "synthetic-a"
+      },
+      {
+        "sourceNoticeId": "notice-1",
+        "publishedDate": "2026-09-15",
+        "subjectToken": "synthetic-a"
+      },
+      {
+        "sourceNoticeId": "notice-late",
+        "publishedDate": "2026-09-14",
+        "subjectToken": "synthetic-b"
+      }
+    ],
+    "expected": {
+      "uniqueNotices": 2,
+      "duplicatesIgnored": 1,
+      "lateNoticeCapturedByOverlap": true,
+      "lastCompletedDateAfterSuccess": "2026-09-15",
+      "lastCompletedDateAfterFailure": "2026-09-14"
+    }
+  },
+  "relationLifecycle": {
+    "cases": [
+      {
+        "name": "provider relation ends",
+        "before": {
+          "active": true,
+          "provenance": "METSIS"
+        },
+        "inputPresent": false,
+        "after": {
+          "active": false,
+          "auditEvent": "ENDED"
+        }
+      },
+      {
+        "name": "provider relation reactivates",
+        "before": {
+          "active": false,
+          "provenance": "METSIS"
+        },
+        "inputPresent": true,
+        "after": {
+          "active": true,
+          "auditEvent": "REACTIVATED"
+        }
+      },
+      {
+        "name": "manual relation conflicts",
+        "before": {
+          "active": true,
+          "provenance": "MANUAL"
+        },
+        "inputPresent": false,
+        "after": {
+          "active": true,
+          "auditEvent": "MANUAL_PRESERVED"
+        }
+      }
+    ]
+  }
+}

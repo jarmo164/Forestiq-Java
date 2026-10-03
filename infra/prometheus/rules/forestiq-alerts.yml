@@ -1,0 +1,33 @@
+groups:
+  - name: forestiq-slo
+    rules:
+      - alert: ForestIQApiReadinessFailure
+        expr: up{job="forestiq-api"} == 0
+        for: 2m
+        labels: {severity: critical, owner: platform, runbook: docs/runbooks/observability-alerts.md#forestiqapireadinessfailure}
+        annotations: {summary: ForestIQ API metrics target is down, description: Prometheus cannot scrape the API readiness/metrics endpoint.}
+      - alert: ForestIQApiHigh5xxRate
+        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 1) > 0.02
+        for: 10m
+        labels: {severity: high, owner: backend, runbook: docs/runbooks/observability-alerts.md#forestiqapihigh5xxrate}
+        annotations: {summary: API 5xx rate above SLO, description: More than 2% of API requests have returned 5xx for 10 minutes.}
+      - alert: ForestIQIntegrationWorkerHeartbeatStale
+        expr: (time() * 1000 - max(forestiq_integration_worker_last_poll_epoch_millis)) > 300000
+        for: 5m
+        labels: {severity: high, owner: ingest, runbook: docs/runbooks/observability-alerts.md#forestiqintegrationworkerheartbeatstale}
+        annotations: {summary: Ingestion worker heartbeat is stale, description: No worker poll heartbeat has been observed within the expected window.}
+      - alert: ForestIQIntegrationQueueBacklog
+        expr: sum(forestiq_integration_queue_depth) > 25
+        for: 15m
+        labels: {severity: high, owner: ingest, runbook: docs/runbooks/observability-alerts.md#forestiqintegrationqueuebacklog}
+        annotations: {summary: Integration queue backlog exceeds SLO, description: Durable integration queue has stayed above the configured backlog threshold.}
+      - alert: ForestIQProviderFailures
+        expr: increase(forestiq_integration_job_failures_total[30m]) >= 3
+        for: 5m
+        labels: {severity: high, owner: ingest, runbook: docs/runbooks/observability-alerts.md#forestiqproviderfailures}
+        annotations: {summary: Repeated provider failures, description: Integration jobs are failing repeatedly and may affect data freshness.}
+      - alert: ForestIQGeospatialFreshnessLag
+        expr: max(forestiq_geospatial_source_age_seconds) > 86400
+        for: 30m
+        labels: {severity: high, owner: geospatial, runbook: docs/runbooks/observability-alerts.md#forestiqgeospatialfreshnesslag}
+        annotations: {summary: Geospatial source freshness is outside SLO, description: A geospatial source has exceeded the accepted freshness lag.}

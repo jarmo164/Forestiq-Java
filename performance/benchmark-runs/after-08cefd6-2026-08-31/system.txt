@@ -1,0 +1,24 @@
+captured=2026-08-31T21:39:14+03:00
+label=after-08cefd6
+branch=main
+commit=08cefd6ce1618902d7fd1a28ed15a84d189ddfa2
+dirty=5
+compose_profile=performance
+organization_id=11111111-1111-1111-1111-111111111111
+overview_tile=8/145/75
+detail_tile=12/2329/1202
+uname=MINGW64_NT-10.0-26200 Data 3.6.5-22c95533.x86_64 2025-10-10 12:02 UTC x86_64 Msys
+docker=29.7.2
+compose=5.4.0
+=== host_memory_before ===
+docker_mem_total_bytes=8181211136
+total_visible_kb=16489528
+free_physical_kb=978856
+total_virtual_kb=34687028
+free_virtual_kb=4471900
+=== host_memory_after ===
+docker_mem_total_bytes=8181211136
+total_visible_kb=16489528
+free_physical_kb=734752
+total_virtual_kb=34687028
+free_virtual_kb=4265316

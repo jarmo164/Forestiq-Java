@@ -1,0 +1,36 @@
+# Local development overrides.
+# Docker Compose loads this file automatically together with compose.yaml.
+# Keep browser-facing OIDC settings pinned to localhost so stale LAN IP values in
+# a developer .env cannot break Keycloak login after the host address changes.
+services:
+  keycloak:
+    environment:
+      KC_HOSTNAME: http://localhost:8180
+
+  api:
+    environment:
+      KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/forestiq-dev
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/forestiq-dev/protocol/openid-connect/certs
+      KEYCLOAK_ADMIN_REALM: forestiq-dev
+      KEYCLOAK_ADMIN_CLIENT_ID: forestiq-admin-api
+      KEYCLOAK_ADMIN_CLIENT_SECRET: forestiq-local-admin-api
+      FORESTIQ_NOTIFICATIONS_APP_BASE_URL: ${FORESTIQ_NOTIFICATIONS_APP_BASE_URL:-http://localhost:3000}
+      FORESTIQ_NOTIFICATIONS_FROM: ${FORESTIQ_NOTIFICATIONS_FROM:-no-reply@forestiq.local}
+      FORESTIQ_NOTIFICATIONS_SCAN_DELAY_MS: ${FORESTIQ_NOTIFICATIONS_SCAN_DELAY_MS:-60000}
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:-true}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:-true}
+
+  frontend:
+    build:
+      args:
+        NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8180
+        NEXT_PUBLIC_KEYCLOAK_REALM: forestiq-dev
+        NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: forestiq-web
+    environment:
+      NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8180
+      NEXT_PUBLIC_KEYCLOAK_REALM: forestiq-dev
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: forestiq-web

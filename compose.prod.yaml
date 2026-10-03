@@ -1,0 +1,136 @@
+name: forestiq-production
+
+# Deployable ForestIQ application services only. PostgreSQL, Keycloak and S3 are
+# production dependencies supplied by the deployment platform/secret manager;
+# this file never starts a development-mode identity server or local databases.
+services:
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: production
+      FORESTIQ_RUNTIME_ROLE: api
+      FORESTIQ_RUNTIME_PYTHON_JOB_KEYS: ${INGEST_PYTHON_JOB_KEYS:-}
+      DATABASE_URL: ${DATABASE_URL:?Set production DATABASE_URL}
+      DATABASE_USERNAME: ${DATABASE_USERNAME:?Set production DATABASE_USERNAME}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Set production DATABASE_PASSWORD}
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
+
+      KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI:?Set the public production realm issuer URI}
+      KEYCLOAK_JWK_SET_URI: ${KEYCLOAK_JWK_SET_URI:?Set the production realm JWK set URI}
+      KEYCLOAK_ADMIN_BASE_URL: ${KEYCLOAK_ADMIN_BASE_URL:?Set production Keycloak Admin API base URL}
+      KEYCLOAK_ADMIN_REALM: ${KEYCLOAK_ADMIN_REALM:?Set production Keycloak realm}
+      KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-forestiq-admin-api}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:?Set production Keycloak Admin API client secret}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?Set production frontend origin(s)}
+
+      S3_ENDPOINT: ${S3_ENDPOINT:?Set production S3-compatible endpoint}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set production object-storage access key}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set production object-storage secret key}
+      S3_BUCKET: ${S3_BUCKET:?Set production object-storage bucket}
+      S3_PATH_STYLE_ACCESS: ${S3_PATH_STYLE_ACCESS:-false}
+
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      FORESTIQ_BUSINESS_CALENDAR_ADDITIONAL_HOLIDAYS: ${FORESTIQ_BUSINESS_CALENDAR_ADDITIONAL_HOLIDAYS:-}
+      FORESTIQ_BUSINESS_CALENDAR_WORKING_DAY_OVERRIDES: ${FORESTIQ_BUSINESS_CALENDAR_WORKING_DAY_OVERRIDES:-}
+      FORESTIQ_NOTIFICATIONS_APP_BASE_URL: ${FORESTIQ_NOTIFICATIONS_APP_BASE_URL:?Set production ForestIQ frontend URL}
+      FORESTIQ_NOTIFICATIONS_FROM: ${FORESTIQ_NOTIFICATIONS_FROM:?Set production notification sender address}
+      FORESTIQ_NOTIFICATIONS_SCAN_DELAY_MS: ${FORESTIQ_NOTIFICATIONS_SCAN_DELAY_MS:-60000}
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:-true}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:-true}
+
+      # Provider configuration is intentionally worker-only.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health/readiness >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    ports:
+      - "${API_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8080}:8080"
+
+
+  ingest-scheduler:
+    build:
+      context: ./ingest
+    command: ["python", "-m", "forestiq_ingest.scheduler"]
+    restart: unless-stopped
+    stop_grace_period: 5m
+    environment:
+      DATABASE_URL: ${INGEST_DATABASE_URL:?Set the forestiq_ingest production DATABASE_URL}
+      FORESTIQ_INGEST_COMPONENT: scheduler
+      FORESTIQ_INGEST_ENABLED_JOB_KEYS: ${INGEST_ENABLED_JOB_KEYS:-OWNER_CADASTRE_RELATIONS,WEASEL_OWNERSHIP_TRANSITIONS,INHERITANCE_NOTICES}
+      FORESTIQ_INGEST_SCHEDULER_POLL_SECONDS: ${INGEST_SCHEDULER_POLL_SECONDS:-30}
+      FORESTIQ_INGEST_SCHEDULER_LEASE_SECONDS: ${INGEST_SCHEDULER_LEASE_SECONDS:-90}
+      FORESTIQ_INGEST_MAX_CATCHUP_WINDOWS: ${INGEST_MAX_CATCHUP_WINDOWS:-2}
+    healthcheck:
+      test: ["CMD", "python", "-m", "forestiq_ingest.healthcheck", "--component", "scheduler", "--max-age-seconds", "120"]
+      interval: 30s
+      timeout: 10s
+      retries: 4
+      start_period: 30s
+
+  ingest-worker:
+    build:
+      context: ./ingest
+    command: ["python", "-m", "forestiq_ingest.worker"]
+    restart: unless-stopped
+    stop_grace_period: 5m
+    environment:
+      DATABASE_URL: ${INGEST_DATABASE_URL:?Set the forestiq_ingest production DATABASE_URL}
+      FORESTIQ_INGEST_COMPONENT: worker
+      FORESTIQ_INGEST_ENABLED_JOB_KEYS: ${INGEST_ENABLED_JOB_KEYS:-OWNER_CADASTRE_RELATIONS,WEASEL_OWNERSHIP_TRANSITIONS,INHERITANCE_NOTICES}
+      FORESTIQ_INGEST_WORKER_ID: ${INGEST_WORKER_ID:-production-worker-1}
+      FORESTIQ_INGEST_WORKER_POLL_SECONDS: ${INGEST_WORKER_POLL_SECONDS:-2}
+      FORESTIQ_INGEST_HEARTBEAT_SECONDS: ${INGEST_HEARTBEAT_SECONDS:-15}
+      FORESTIQ_INGEST_LEASE_SECONDS: ${INGEST_LEASE_SECONDS:-90}
+      FORESTIQ_INGEST_TEMP_DIR: /var/tmp/forestiq-ingest
+      METSIS_PORTFOLIO_URI: ${METSIS_PORTFOLIO_URI:-}
+      METSIS_PORTFOLIO_AUTHORIZATION: ${METSIS_PORTFOLIO_AUTHORIZATION:-}
+      METSIS_PORTFOLIO_ORGANIZATION_ID: ${METSIS_PORTFOLIO_ORGANIZATION_ID:-}
+      WEASEL_API_BASE_URL: ${WEASEL_API_BASE_URL:-}
+      WEASEL_API_ACCESS_TOKEN: ${WEASEL_API_ACCESS_TOKEN:-}
+      WEASEL_ORGANIZATION_ID: ${WEASEL_ORGANIZATION_ID:-}
+      METSAREGISTER_WFS_URL: ${METSAREGISTER_WFS_URL:-https://gsavalik.envir.ee/geoserver/metsaregister/ows}
+      MARU_CADASTRE_SNAPSHOT_URL: ${MARU_CADASTRE_SNAPSHOT_URL:-https://s3.pilw.io/rp-kemit-kataster/ANDMED/Eesti_KATASTER_GPKG.zip}
+      GEOSPATIAL_DOWNLOAD_DIR: ${GEOSPATIAL_DOWNLOAD_DIR:-/var/tmp/forestiq-ingest/cadastre}
+      INHERITANCE_SOURCE_BASE_URL: ${INHERITANCE_SOURCE_BASE_URL:-}
+      INHERITANCE_SOURCE_API_TOKEN: ${INHERITANCE_SOURCE_API_TOKEN:-}
+      INHERITANCE_SOURCE_URI_TEMPLATE: ${INHERITANCE_SOURCE_URI_TEMPLATE:-https://www.ametlikudteadaanded.ee/ee/-/parimisteated/parimismenetluse-algatamine/%04d/%02d/%02d/xml}
+    tmpfs:
+      - /var/tmp/forestiq-ingest:size=1073741824,mode=1777
+    healthcheck:
+      test: ["CMD", "python", "-m", "forestiq_ingest.healthcheck", "--component", "worker", "--max-age-seconds", "120"]
+      interval: 30s
+      timeout: 10s
+      retries: 4
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_KEYCLOAK_URL: ${NEXT_PUBLIC_KEYCLOAK_URL:?Set public production Keycloak URL}
+        NEXT_PUBLIC_KEYCLOAK_REALM: ${NEXT_PUBLIC_KEYCLOAK_REALM:?Set production Keycloak realm}
+        NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${NEXT_PUBLIC_KEYCLOAK_CLIENT_ID:-forestiq-web}
+        NEXT_PUBLIC_MAPTILER_KEY: ${NEXT_PUBLIC_MAPTILER_KEY:?Set production MapTiler key}
+        INTERNAL_API_BASE_URL: http://api:8080
+    restart: unless-stopped
+    environment:
+      INTERNAL_API_BASE_URL: http://api:8080
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+      NEXT_PUBLIC_KEYCLOAK_URL: ${NEXT_PUBLIC_KEYCLOAK_URL:?Set public production Keycloak URL}
+      NEXT_PUBLIC_KEYCLOAK_REALM: ${NEXT_PUBLIC_KEYCLOAK_REALM:?Set production Keycloak realm}
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${NEXT_PUBLIC_KEYCLOAK_CLIENT_ID:-forestiq-web}
+      NEXT_PUBLIC_MAPTILER_KEY: ${NEXT_PUBLIC_MAPTILER_KEY:?Set production MapTiler key}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-3000}:3000"

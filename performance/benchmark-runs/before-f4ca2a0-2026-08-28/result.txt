@@ -1,0 +1,15 @@
+
+ForestIQ benchmark completed.
+Result directory: .run/performance/before-20260828-170942
+
+benchmark         ok   total  avg_ms    p50_ms     p95_ms     p99_ms     max_ms
+owners_legacy     12   200    15993.09  17153.992  24962.773  24962.773  24962.773
+owners_cursor     0    200    NA        NA         NA         NA         NA
+relations_legacy  7    205    16273.72  16477.042  25349.734  25349.734  25349.734
+relations_cursor  0    200    NA        NA         NA         NA         NA
+parcel_summary    0    200    NA        NA         NA         NA         NA
+tile_cold         120  120    852.81    441.758    2028.441   2231.154   4813.070
+tile_warm         120  120    1785.23   1822.011   2112.156   2154.858   2170.089
+
+Keep this directory for comparison. After updating to main, run the SAME script again.
+Recommended labels: BENCHMARK_LABEL=before and BENCHMARK_LABEL=after

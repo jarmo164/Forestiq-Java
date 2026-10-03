@@ -1,0 +1,3 @@
+# Runtime dependency for scripts/sync_eelis_wfs_to_postgis.py.
+# The WFS client itself uses only the Python standard library.
+psycopg[binary]>=3.2,<4

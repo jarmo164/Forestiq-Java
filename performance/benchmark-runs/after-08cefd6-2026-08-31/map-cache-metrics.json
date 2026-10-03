@@ -1,0 +1,1 @@
+{"name":"forestiq.map.tile.cache.requests","measurements":[{"statistic":"COUNT","value":487.0}],"availableTags":[{"tag":"result","values":["hit","miss","coalesced"]},{"tag":"layer","values":["land_parcel","land_parcel_overview"]}]}

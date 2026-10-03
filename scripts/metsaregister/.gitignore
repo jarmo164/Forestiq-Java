@@ -1,0 +1,7 @@
+data/
+*.csv
+*.csv.gz
+*.keys.sqlite
+*.partial.csv
+__pycache__/
+.venv/

@@ -1,0 +1,69 @@
+{
+  "fixtureVersion": 1,
+  "source": "MARU_CADASTRE",
+  "jobKey": "CADASTRE_PUBLIC_DATA",
+  "artifact": {
+    "version": "synthetic-2026-09-16",
+    "sha256": "af867c31b5d2e58fa44e30ff567ed91bf588c9f4670e3b274c7f70459cd6a168",
+    "crs": "EPSG:3301",
+    "rows": [
+      {
+        "cadastreCode": "12345:678:0001",
+        "address": "Näidise 1",
+        "areaM2": 42500,
+        "bbox": [
+          541000,
+          6439000,
+          541250,
+          6439250
+        ]
+      },
+      {
+        "cadastreCode": "12345:678:0002",
+        "address": "Näidise 2",
+        "areaM2": 21900,
+        "bbox": [
+          542000,
+          6438000,
+          542200,
+          6438200
+        ]
+      }
+    ]
+  },
+  "currentBefore": {
+    "generationId": "00000000-0000-0000-0000-000000000010",
+    "artifactSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "rows": 1
+  },
+  "expected": {
+    "rows": 2,
+    "uniqueCadastreCodes": 2,
+    "duplicates": 0,
+    "invalidGeometries": 0,
+    "withinEstoniaEnvelope": true,
+    "publishAllowed": true,
+    "currentAfterGenerationId": "NEW_GENERATION"
+  },
+  "variants": {
+    "unchanged": {
+      "artifactSha256": "af867c31b5d2e58fa44e30ff567ed91bf588c9f4670e3b274c7f70459cd6a168",
+      "expectedNoOp": true,
+      "rewriteAllowed": false
+    },
+    "duplicate": {
+      "mutation": "repeat cadastreCode 12345:678:0001",
+      "publishAllowed": false,
+      "errorClass": "DUPLICATE_SOURCE_ID"
+    },
+    "outOfBounds": {
+      "mutation": "set bbox to [0,0,1,1]",
+      "publishAllowed": false,
+      "errorClass": "GEOMETRY_OUTSIDE_ESTONIA"
+    },
+    "interruptedBeforePublish": {
+      "publishAllowed": false,
+      "currentAfterGenerationId": "00000000-0000-0000-0000-000000000010"
+    }
+  }
+}
