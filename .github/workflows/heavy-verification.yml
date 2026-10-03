@@ -248,7 +248,7 @@ jobs:
         run: ./gradlew --no-daemon integrationTest
       - name: Upload backend integration diagnostics
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: heavy-backend-integration-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -322,7 +322,7 @@ jobs:
           "$PYTHON_BIN" -m pytest -m integration --junitxml=artifacts/integration.xml
       - name: Upload ingestion integration diagnostics
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: heavy-ingest-integration-${{ github.run_id }}-${{ github.run_attempt }}
           path: ingest/artifacts/
@@ -395,7 +395,7 @@ jobs:
             --junitxml=artifacts/metsaregister/pytest.xml
       - name: Upload Metsaregister diagnostics
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: heavy-metsaregister-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/metsaregister/
@@ -528,7 +528,7 @@ jobs:
           pnpm typecheck
       - name: Upload OpenAPI drift diagnostics
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: heavy-openapi-contract-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
