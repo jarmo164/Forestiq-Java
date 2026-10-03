@@ -216,7 +216,7 @@ jobs:
             --commit "$RELEASE_SHA" \
             --output "artifacts/${IMAGE_KEY}.json"
       - name: Upload supply-chain evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-image-${{ matrix.image }}-${{ needs.verify.outputs.sha }}
           path: artifacts/
@@ -254,7 +254,7 @@ jobs:
             --output artifacts/release-images.json
           echo "release_id=${{ needs.verify.outputs.release_id }}" >> "$GITHUB_OUTPUT"
       - name: Upload immutable image manifest
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-images-${{ needs.verify.outputs.sha }}
           path: artifacts/release-images.json
@@ -305,7 +305,7 @@ jobs:
         run: ./gradlew --no-daemon verifyProductionDatabaseRoles
       - name: Upload migration evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: production-migration-${{ needs.verify.outputs.sha }}
           path: artifacts/production-migration.log
@@ -413,7 +413,7 @@ jobs:
           python scripts/release/assemble_release_manifest.py "${args[@]}"
       - name: Upload final release manifest
         if: ${{ success() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-manifest-${{ needs.verify.outputs.release_id }}
           path: artifacts/release-manifest.json
@@ -421,7 +421,7 @@ jobs:
           retention-days: 365
       - name: Upload production verification and rollback evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: production-verification-${{ needs.verify.outputs.sha }}
           path: |
@@ -432,7 +432,7 @@ jobs:
           retention-days: 90
       - name: Upload Render deployment evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: render-deployments-${{ needs.verify.outputs.sha }}
           path: artifacts/render-deployments.json
