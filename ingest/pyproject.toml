@@ -20,7 +20,7 @@ geo = [
   "shapely>=2.0,<3",
 ]
 test = [
-  "pytest>=8.3,<9",
+  "pytest>=8.3,<10",
 ]
 
 [project.scripts]
