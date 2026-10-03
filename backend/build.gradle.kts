@@ -62,7 +62,7 @@ dependencies {
     implementation("io.micrometer:micrometer-tracing-bridge-otel")
     implementation("io.opentelemetry:opentelemetry-exporter-otlp")
     implementation("io.sentry:sentry-spring-boot-starter-jakarta:8.58.0")
-    implementation("software.amazon.awssdk:s3:2.30.28")
+    implementation("software.amazon.awssdk:s3:2.55.8")
     implementation("com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10")
 
     // ForestIQ has a PostgreSQL-specific bulk ingestion adapter that uses the
